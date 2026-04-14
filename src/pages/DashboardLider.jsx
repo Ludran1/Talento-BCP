@@ -94,7 +94,6 @@ function DashboardLider() {
 
   return (
     <div>
-      <Navbar />
 
       <div className="container mt-4" style={{ maxWidth: 1100 }}>
 

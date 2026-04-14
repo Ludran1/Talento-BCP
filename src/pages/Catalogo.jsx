@@ -243,8 +243,6 @@ function Catalogo() {
 
   return (
     <div className="cat-wrapper">
-      <Navbar />
-
       {/* TOPBAR */}
       <div className="cat-topbar">
         <div className="cat-topbar-stats">

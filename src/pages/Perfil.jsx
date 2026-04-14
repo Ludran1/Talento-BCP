@@ -144,7 +144,6 @@ function Perfil() {
 
   return (
     <div className="perfil-wrapper">
-      <Navbar />
       <div className="perfil-container">
 
         {/* ══ SIDEBAR ══ */}

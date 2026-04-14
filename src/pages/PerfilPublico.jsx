@@ -85,7 +85,6 @@ function PerfilPublico() {
 
   return (
     <div className="perfil-wrapper">
-      <Navbar />
 
       <div className="publico-container">
 
