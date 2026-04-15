@@ -8,7 +8,6 @@ import {
 import { onAuthStateChanged } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 import Filtros from "./Filtros.jsx";
-import Navbar from "../components/Navbar.jsx";
 import "../stylesheets/Catalogo.css";
 
 import {
@@ -70,14 +69,15 @@ const rangoExp = (m) => {
    IMPORTANTE: usa "rotaciones" (campo real en Firestore),
    NO "areasRotacion" (nombre incorrecto anterior).           */
 const FILTROS_INIT = {
-  busqueda: "",
-  areasActuales:    [],   // filtra por p.area
-  areasAnteriores:  [],   // filtra por p.rotaciones[].area
+  busqueda:         "",
+  areasActuales:    [],
+  areasAnteriores:  [],
   skills:           [],
   idiomas:          [],
   nivelEducacion:   [],
   generos:          [],
-  ubicaciones:      [],   // filtra por ciudad o distrito
+  ubicaciones:      [],
+  rangosExp:        [],
   soloFavoritos:    false,
   soloConProyectos: false,
   soloConRotaciones:false,
@@ -173,16 +173,17 @@ function Catalogo() {
         /* solo con historial BCP ← campo correcto */
         if (filtros.soloConRotaciones && !(p.rotaciones?.length > 0)) return false;
 
-        /* skills */
+        /* skills — comparación case-insensitive para tolerar variantes de escritura */
         if (filtros.skills.length > 0) {
-          const sp = [...(p.skills || []), ...(p.habilidadesBlandas || [])].map((s) => s.trim());
-          if (!filtros.skills.some((s) => sp.includes(s))) return false;
+          const sp = [...(p.skills || []), ...(p.habilidadesBlandas || [])]
+            .map((s) => s.trim().toLowerCase());
+          if (!filtros.skills.some((s) => sp.includes(s.toLowerCase()))) return false;
         }
 
         /* idiomas */
         if (filtros.idiomas.length > 0) {
-          const ip = (p.idiomas || []).map((i) => i.idioma || i);
-          if (!filtros.idiomas.some((i) => ip.includes(i))) return false;
+          const ip = (p.idiomas || []).map((i) => (i.idioma || i).toLowerCase());
+          if (!filtros.idiomas.some((i) => ip.includes(i.toLowerCase()))) return false;
         }
 
         /* nivel educación */
@@ -200,6 +201,13 @@ function Catalogo() {
         if (filtros.ubicaciones.length > 0) {
           const ubic = [p.ciudad, p.distrito, p.pais].filter(Boolean).join(" ").toLowerCase();
           if (!filtros.ubicaciones.some((u) => ubic.includes(u.toLowerCase()))) return false;
+        }
+
+        /* rango de experiencia */
+        if (filtros.rangosExp?.length > 0) {
+          const meses = calcMesesExp(p.experiencia);
+          const rango = rangoExp(meses) || "Sin experiencia";
+          if (!filtros.rangosExp.includes(rango)) return false;
         }
 
         /* favoritos */
@@ -247,6 +255,7 @@ function Catalogo() {
     (filtros.nivelEducacion?.length || 0) +
     (filtros.generos?.length        || 0) +
     (filtros.ubicaciones?.length    || 0) +
+    (filtros.rangosExp?.length      || 0) +
     (filtros.soloFavoritos    ? 1 : 0) +
     (filtros.soloConProyectos ? 1 : 0) +
     (filtros.soloConRotaciones? 1 : 0);

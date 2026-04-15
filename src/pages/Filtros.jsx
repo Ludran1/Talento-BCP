@@ -1,7 +1,12 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import { FiSearch, FiChevronDown, FiX } from "react-icons/fi";
+import { IoFilterOutline } from "react-icons/io5";
 
-/* ─── CONSTANTES ─── */
-const AREAS_BCP = [
+/* ════════════════════════════════════════════════
+   CONSTANTES — todas las listas están normalizadas
+   en Title Case para evitar duplicados por mayúsculas
+════════════════════════════════════════════════ */
+export const AREAS_BCP = [
   "Analítica & Tecnología",
   "Finanzas & Control",
   "Gestión & Operaciones",
@@ -10,7 +15,7 @@ const AREAS_BCP = [
   "Marketing & Experiencia Cliente",
 ];
 
-const NIVELES_EDU = [
+export const NIVELES_EDU = [
   "Técnico",
   "Universitario (en curso)",
   "Universitario (egresado)",
@@ -19,32 +24,84 @@ const NIVELES_EDU = [
   "Doctorado",
 ];
 
-const IDIOMAS_OPC = [
-  "Español","Inglés","Portugués","Francés","Alemán",
-  "Chino (Mandarín)","Japonés","Coreano","Italiano","Ruso",
-  "Árabe","Hindi","Neerlandés","Polaco","Turco",
-  "Sueco","Noruego","Danés","Finés","Griego",
-  "Hebreo","Tailandés","Vietnamita","Indonesio","Malayo",
-  "Ucraniano","Catalán","Quechua","Aymara",
+/* Idiomas en orden ALFABÉTICO */
+export const IDIOMAS_OPC = [
+  "Alemán","Árabe","Aymara","Catalán","Chino (Mandarín)",
+  "Coreano","Danés","Español","Finés","Francés",
+  "Griego","Hebreo","Hindi","Indonesio","Inglés",
+  "Italiano","Japonés","Malayo","Neerlandés","Noruego",
+  "Polaco","Portugués","Quechua","Ruso","Sueco",
+  "Tailandés","Turco","Ucraniano","Vietnamita",
 ];
 
-const GENEROS = ["Hombre", "Mujer", "Prefiero no decir", "Otro"];
+/* Ubicaciones en orden ALFABÉTICO */
+export const UBICACIONES = [
+  "Arequipa","Ate","Barranco","Callao","Chiclayo",
+  "Chorrillos","Cusco","El Agustino","Huancayo","Independencia",
+  "Iquitos","Jesús María","La Molina","Lima","Lince",
+  "Los Olivos","Magdalena","Miraflores","Piura","Pueblo Libre",
+  "San Borja","San Isidro","San Martín de Porres","San Miguel",
+  "Santa Anita","Surco","Trujillo","Villa El Salvador",
+].sort();
 
-/* Distritos / ciudades más frecuentes en Lima + otras ciudades de Perú */
-const UBICACIONES = [
-  "Lima", "Miraflores", "San Isidro", "Surco", "La Molina",
-  "San Borja", "Barranco", "Pueblo Libre", "Magdalena",
-  "Lince", "Jesús María", "San Miguel", "Chorrillos",
-  "Los Olivos", "Independencia", "San Martín de Porres",
-  "Ate", "Santa Anita", "El Agustino", "Villa El Salvador",
-  "Callao", "Arequipa", "Trujillo", "Cusco", "Piura",
-  "Chiclayo", "Iquitos", "Huancayo",
+export const GENEROS = ["Hombre","Mujer","Prefiero no decir","Otro"];
+
+export const RANGOS_EXP = [
+  "Sin experiencia","1–3 meses","4–6 meses","6–12 meses","+12 meses",
 ];
 
+/* ── helper ── */
 const toggle = (arr, val) =>
   arr.includes(val) ? arr.filter((v) => v !== val) : [...arr, val];
 
-/* ─── Grupo colapsable ─── */
+/* ════════════════════════════════════════════════
+   FILTROS_INIT — exportado para usarlo en Catalogo
+════════════════════════════════════════════════ */
+export const FILTROS_INIT = {
+  busqueda:         "",
+  areasActuales:    [],
+  areasAnteriores:  [],
+  skills:           [],
+  idiomas:          [],
+  nivelEducacion:   [],
+  generos:          [],
+  ubicaciones:      [],
+  rangosExp:        [],
+  soloFavoritos:    false,
+  soloConProyectos: false,
+  soloConRotaciones:false,
+};
+
+/* ════════════════════════════════════════════════
+   SUBCOMPONENTES INTERNOS
+════════════════════════════════════════════════ */
+
+/* Chip seleccionable */
+function Chip({ label, activo, onClick }) {
+  return (
+    <button
+      type="button"
+      className={`fg-chip ${activo ? "fg-chip-activo" : ""}`}
+      onClick={onClick}
+    >
+      {label}
+    </button>
+  );
+}
+
+/* Toggle switch */
+function ToggleRow({ label, activo, onChange }) {
+  return (
+    <div className="fg-toggle-row" onClick={onChange}>
+      <span className="fg-toggle-label">{label}</span>
+      <div className={`fg-toggle ${activo ? "fg-toggle-on" : ""}`}>
+        <div className="fg-toggle-bola" />
+      </div>
+    </div>
+  );
+}
+
+/* Grupo colapsable genérico */
 function Grupo({ titulo, badge = 0, inicialAbierto = false, children }) {
   const [abierto, setAbierto] = useState(inicialAbierto);
   return (
@@ -58,46 +115,139 @@ function Grupo({ titulo, badge = 0, inicialAbierto = false, children }) {
           <span className="fg-titulo">{titulo}</span>
           {badge > 0 && <span className="fg-badge-mini">{badge}</span>}
         </span>
-        <span className={`fg-chevron ${abierto ? "fg-chevron-open" : ""}`}>❯</span>
+        <FiChevronDown
+          size={14}
+          className={`fg-chevron-icon ${abierto ? "fg-chevron-icon-open" : ""}`}
+        />
       </button>
       {abierto && <div className="fg-body">{children}</div>}
     </div>
   );
 }
 
-function Chip({ label, activo, onClick }) {
-  return (
-    <button
-      type="button"
-      className={`fg-chip ${activo ? "fg-chip-activo" : ""}`}
-      onClick={onClick}
-    >
-      {label}
-    </button>
-  );
-}
+/* ── Dropdown alfabético con búsqueda + checkboxes ── */
+function AlphaDropdown({ titulo, opciones, seleccionadas, onChange }) {
+  const [abierto,  setAbierto]  = useState(false);
+  const [busqueda, setBusqueda] = useState("");
+  const ref = useRef(null);
 
-function ToggleRow({ label, activo, onChange }) {
+  useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setAbierto(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
+  const filtradas = opciones.filter((o) =>
+    o.toLowerCase().includes(busqueda.toLowerCase())
+  );
+
+  /* agrupar por primera letra */
+  const porLetra = filtradas.reduce((acc, o) => {
+    const l = o[0].toUpperCase();
+    if (!acc[l]) acc[l] = [];
+    acc[l].push(o);
+    return acc;
+  }, {});
+
+  const tgl = (v) => onChange(toggle(seleccionadas, v));
+  const count = seleccionadas.length;
+
   return (
-    <div className="fg-toggle-row" onClick={onChange}>
-      <span className="fg-toggle-label">{label}</span>
-      <div className={`fg-toggle ${activo ? "fg-toggle-on" : ""}`}>
-        <div className="fg-toggle-bola" />
-      </div>
+    <div className="alpha-dd" ref={ref}>
+      {/* Trigger */}
+      <button
+        type="button"
+        className={`alpha-trigger ${abierto ? "alpha-trigger-open" : ""} ${count > 0 ? "alpha-trigger-activo" : ""}`}
+        onClick={() => setAbierto((v) => !v)}
+      >
+        <span>
+          {count === 0
+            ? `Seleccionar ${titulo.toLowerCase()}...`
+            : count === 1
+            ? seleccionadas[0]
+            : `${count} ${titulo.toLowerCase()} seleccionados`}
+        </span>
+        <FiChevronDown
+          size={13}
+          className={`alpha-chevron ${abierto ? "alpha-chevron-open" : ""}`}
+        />
+      </button>
+
+      {/* Panel */}
+      {abierto && (
+        <div className="alpha-panel">
+          {/* Buscador */}
+          <div className="alpha-search-wrap">
+            <FiSearch size={13} color="#94a3b8"/>
+            <input
+              className="alpha-search"
+              placeholder={`Buscar ${titulo.toLowerCase()}...`}
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              autoFocus
+            />
+            {busqueda && (
+              <button className="alpha-clear-btn" onClick={() => setBusqueda("")}>
+                <FiX size={12}/>
+              </button>
+            )}
+          </div>
+
+          {/* Lista */}
+          <div className="alpha-list">
+            {Object.entries(porLetra).map(([letra, items]) => (
+              <div key={letra}>
+                <div className="alpha-letra">{letra}</div>
+                {items.map((o) => (
+                  <label key={o} className="alpha-item">
+                    <input
+                      type="checkbox"
+                      checked={seleccionadas.includes(o)}
+                      onChange={() => tgl(o)}
+                    />
+                    <span>{o}</span>
+                  </label>
+                ))}
+              </div>
+            ))}
+            {filtradas.length === 0 && (
+              <p className="alpha-empty">Sin resultados</p>
+            )}
+          </div>
+
+          {/* Chips seleccionados al pie */}
+          {seleccionadas.length > 0 && (
+            <div className="alpha-seleccionados">
+              {seleccionadas.map((o) => (
+                <span key={o} className="alpha-chip-sel" onClick={() => tgl(o)}>
+                  {o} <FiX size={10}/>
+                </span>
+              ))}
+              <button
+                className="alpha-clear-all"
+                onClick={() => onChange([])}
+              >
+                Limpiar
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-/* ══════════════════════════════════════════
-   FILTROS
+/* ════════════════════════════════════════════════
+   FILTROS — componente principal
+
    Props:
-     filtros           → estado actual
+     filtros           → objeto de estado actual
      onChange          → fn(nuevosFiltros)
-     skillsDisponibles → string[] dinámicos
+     skillsDisponibles → string[] dinámicos desde Firebase
      esLider           → bool
-     abierto           → bool (drawer mobile)
+     abierto           → bool (mobile drawer)
      onCerrar          → fn()
-══════════════════════════════════════════ */
+════════════════════════════════════════════════ */
 function Filtros({
   filtros,
   onChange,
@@ -107,11 +257,11 @@ function Filtros({
   onCerrar,
 }) {
   const [busqSkill, setBusqSkill] = useState("");
-  const [busqUbic,  setBusqUbic]  = useState("");
 
   const upd = (campo, valor) => onChange({ ...filtros, [campo]: valor });
   const tgl = (campo, val)   => onChange({ ...filtros, [campo]: toggle(filtros[campo] || [], val) });
 
+  /* contadores */
   const cntArea = (filtros.areasActuales?.length || 0) + (filtros.areasAnteriores?.length || 0);
   const total =
     cntArea +
@@ -120,41 +270,28 @@ function Filtros({
     (filtros.nivelEducacion?.length || 0) +
     (filtros.generos?.length        || 0) +
     (filtros.ubicaciones?.length    || 0) +
+    (filtros.rangosExp?.length      || 0) +
     (filtros.soloFavoritos       ? 1 : 0) +
     (filtros.soloConProyectos    ? 1 : 0) +
     (filtros.soloConRotaciones   ? 1 : 0);
 
-  const limpiar = () =>
-    onChange({
-      ...filtros,
-      areasActuales:    [],
-      areasAnteriores:  [],
-      skills:           [],
-      idiomas:          [],
-      nivelEducacion:   [],
-      generos:          [],
-      ubicaciones:      [],
-      soloFavoritos:    false,
-      soloConProyectos: false,
-      soloConRotaciones:false,
-    });
+  const limpiar = () => onChange({ ...FILTROS_INIT, busqueda: filtros.busqueda });
 
-  const skillsFiltrados = skillsDisponibles.filter((s) =>
-    s.toLowerCase().includes(busqSkill.toLowerCase())
-  );
-  const ubicFiltradas = UBICACIONES.filter((u) =>
-    u.toLowerCase().includes(busqUbic.toLowerCase())
-  );
+  const skillsFiltrados = [...skillsDisponibles]
+    .sort()
+    .filter((s) => s.toLowerCase().includes(busqSkill.toLowerCase()));
 
   return (
     <>
+      {/* overlay mobile */}
       {abierto && <div className="filtros-overlay" onClick={onCerrar} />}
 
       <aside className={`filtros-panel ${abierto ? "filtros-panel-open" : ""}`}>
 
-        {/* HEADER */}
+        {/* ── HEADER ── */}
         <div className="filtros-header">
           <div className="filtros-header-left">
+            <IoFilterOutline size={15} color="#003DA5"/>
             <span className="filtros-header-titulo">Filtros</span>
             {total > 0 && <span className="filtros-badge">{total}</span>}
           </div>
@@ -169,7 +306,7 @@ function Filtros({
 
         <div className="filtros-scroll">
 
-          {/* FAVORITOS — solo líderes */}
+          {/* ── FAVORITOS (solo líderes) ── */}
           {esLider && (
             <div className="fg-grupo">
               <div className="fg-cabecera fg-cabecera-flat">
@@ -187,22 +324,30 @@ function Filtros({
             </div>
           )}
 
-          {/* ─── SKILLS / TAGS ─── */}
+          {/* ── SKILLS / TAGS ── */}
           <Grupo
             titulo="Skills / Tags"
             badge={filtros.skills?.length || 0}
-            inicialAbierto={true}
+            inicialAbierto
           >
-            <p className="fg-hint">Filtra por tecnologías y herramientas</p>
-            <input
-              className="fg-search-input"
-              placeholder="Buscar skill..."
-              value={busqSkill}
-              onChange={(e) => setBusqSkill(e.target.value)}
-            />
+            <p className="fg-hint">Tecnologías y herramientas — selección múltiple</p>
+            <div className="fg-search-wrap">
+              <FiSearch size={13} color="#94a3b8"/>
+              <input
+                className="fg-search-input"
+                placeholder="Buscar skill..."
+                value={busqSkill}
+                onChange={(e) => setBusqSkill(e.target.value)}
+              />
+              {busqSkill && (
+                <button className="fg-search-clear" onClick={() => setBusqSkill("")}>
+                  <FiX size={12}/>
+                </button>
+              )}
+            </div>
             {skillsFiltrados.length > 0 ? (
               <div className="fg-chips-wrap">
-                {skillsFiltrados.slice(0, 40).map((s) => (
+                {skillsFiltrados.slice(0, 50).map((s) => (
                   <Chip
                     key={s}
                     label={s}
@@ -210,6 +355,9 @@ function Filtros({
                     onClick={() => tgl("skills", s)}
                   />
                 ))}
+                {skillsFiltrados.length > 50 && (
+                  <span className="fg-mas">+{skillsFiltrados.length - 50} más</span>
+                )}
               </div>
             ) : (
               <p className="fg-empty">
@@ -218,29 +366,23 @@ function Filtros({
             )}
           </Grupo>
 
-          {/* ─── UBICACIÓN ─── */}
-          <Grupo titulo="Ubicación" badge={filtros.ubicaciones?.length || 0}>
-            <p className="fg-hint">Filtra por ciudad o distrito</p>
-            <input
-              className="fg-search-input"
-              placeholder="Buscar ubicación..."
-              value={busqUbic}
-              onChange={(e) => setBusqUbic(e.target.value)}
+          {/* ── UBICACIÓN — dropdown alfabético ── */}
+          <Grupo
+            titulo="Ubicación"
+            badge={filtros.ubicaciones?.length || 0}
+          >
+            <p className="fg-hint">Ciudad o distrito en orden alfabético</p>
+            <AlphaDropdown
+              titulo="Ubicaciones"
+              opciones={UBICACIONES}
+              seleccionadas={filtros.ubicaciones || []}
+              onChange={(v) => upd("ubicaciones", v)}
             />
-            <div className="fg-chips-wrap">
-              {ubicFiltradas.map((u) => (
-                <Chip
-                  key={u}
-                  label={u}
-                  activo={(filtros.ubicaciones || []).includes(u)}
-                  onClick={() => tgl("ubicaciones", u)}
-                />
-              ))}
-            </div>
           </Grupo>
 
-          {/* ─── ÁREA DEL PRACTICANTE ─── */}
+          {/* ── ÁREA DEL PRACTICANTE ── */}
           <Grupo titulo="Área del practicante" badge={cntArea}>
+
             <div className="fg-subgrupo">
               <div className="fg-subgrupo-header">
                 <span className="fg-subgrupo-dot fg-dot-actual" />
@@ -285,21 +427,33 @@ function Filtros({
             </div>
           </Grupo>
 
-          {/* ─── IDIOMAS ─── */}
+          {/* ── IDIOMAS — dropdown alfabético ── */}
           <Grupo titulo="Idiomas" badge={filtros.idiomas?.length || 0}>
+            <p className="fg-hint">Idiomas en orden alfabético</p>
+            <AlphaDropdown
+              titulo="Idiomas"
+              opciones={IDIOMAS_OPC}
+              seleccionadas={filtros.idiomas || []}
+              onChange={(v) => upd("idiomas", v)}
+            />
+          </Grupo>
+
+          {/* ── EXPERIENCIA ── */}
+          <Grupo titulo="Experiencia" badge={filtros.rangosExp?.length || 0}>
+            <p className="fg-hint">Rango de meses de experiencia total</p>
             <div className="fg-chips-wrap">
-              {IDIOMAS_OPC.map((id) => (
+              {RANGOS_EXP.map((r) => (
                 <Chip
-                  key={id}
-                  label={id}
-                  activo={(filtros.idiomas || []).includes(id)}
-                  onClick={() => tgl("idiomas", id)}
+                  key={r}
+                  label={r}
+                  activo={(filtros.rangosExp || []).includes(r)}
+                  onClick={() => tgl("rangosExp", r)}
                 />
               ))}
             </div>
           </Grupo>
 
-          {/* ─── FORMACIÓN ─── */}
+          {/* ── FORMACIÓN ── */}
           <Grupo titulo="Formación" badge={filtros.nivelEducacion?.length || 0}>
             <div className="fg-chips-wrap">
               {NIVELES_EDU.map((n) => (
@@ -313,7 +467,7 @@ function Filtros({
             </div>
           </Grupo>
 
-          {/* ─── GÉNERO ─── */}
+          {/* ── GÉNERO ── */}
           <Grupo titulo="Género" badge={filtros.generos?.length || 0}>
             <div className="fg-chips-wrap">
               {GENEROS.map((g) => (
@@ -327,7 +481,7 @@ function Filtros({
             </div>
           </Grupo>
 
-          {/* ─── PROYECTOS ─── */}
+          {/* ── PROYECTOS ── */}
           <Grupo titulo="Proyectos">
             <ToggleRow
               label="Con proyectos destacados"
@@ -338,7 +492,7 @@ function Filtros({
 
         </div>
 
-        {/* BOTÓN APLICAR mobile */}
+        {/* APLICAR mobile */}
         <div className="filtros-footer-mobile">
           <button className="filtros-aplicar-btn" onClick={onCerrar}>
             Ver resultados →

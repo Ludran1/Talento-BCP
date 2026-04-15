@@ -421,3 +421,229 @@ body { font-family:var(--f); background:var(--g100); color:var(--g700); }
   .btn-editar-header { width:100%; justify-content:center; }
   .form-fila      { grid-template-columns:1fr; }
 }
+
+/* ── Tabs del modal habilidades ── */
+.hab-tabs {
+  display: flex;
+  background: #f1f5f9;
+  border-radius: 9px;
+  padding: 4px;
+  margin-bottom: 14px;
+  gap: 0;
+}
+.hab-tab {
+  flex: 1;
+  padding: 9px 0;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+.hab-tab-activo {
+  background: white;
+  color: #003DA5;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+.hab-tab-badge {
+  background: #003DA5;
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 20px;
+}
+.hab-tab-activo .hab-tab-badge {
+  background: #003DA5;
+}
+
+/* hint */
+.hab-hint {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0 0 10px;
+  line-height: 1.45;
+}
+
+/* ── Buscador ── */
+.hab-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  transition: border-color 0.15s;
+}
+.hab-search-wrap:focus-within { border-color: #003DA5; }
+.hab-search {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 13px;
+  background: transparent;
+  font-family: inherit;
+}
+.hab-search-clear {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #94a3b8;
+  padding: 0;
+  display: flex;
+  line-height: 1;
+}
+.hab-search-clear:hover { color: #374151; }
+
+/* ── Categorías ── */
+.hab-categorias {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.hab-categorias::-webkit-scrollbar { width: 5px; }
+.hab-categorias::-webkit-scrollbar-track { background: #f8fafc; }
+.hab-categorias::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+
+.hab-categoria {}
+.hab-cat-titulo {
+  font-size: 11px;
+  font-weight: 800;
+  color: #003DA5;
+  text-transform: uppercase;
+  letter-spacing: .7px;
+  margin: 0 0 7px;
+}
+
+/* ── Chips de skills ── */
+.hab-chips-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.hab-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1.5px solid #e2e8f0;
+  background: white;
+  font-size: 12px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  user-select: none;
+}
+.hab-chip:hover { border-color: #003DA5; color: #003DA5; background: #eff6ff; }
+.hab-chip-activo {
+  background: #003DA5 !important;
+  color: white !important;
+  border-color: #003DA5 !important;
+}
+.hab-chip-bla {
+  border-color: #e2e8f0;
+  background: white;
+  color: #374151;
+}
+.hab-chip-bla:hover { border-color: #5c7d3e; color: #5c7d3e; background: #f0fdf4; }
+.hab-chip-bla-activo {
+  background: #5c7d3e !important;
+  color: white !important;
+  border-color: #5c7d3e !important;
+}
+
+.hab-empty {
+  font-size: 12px;
+  color: #94a3b8;
+  padding: 10px 0;
+  margin: 0;
+}
+
+/* ── Skill personalizada ── */
+.hab-custom-wrap {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed #e2e8f0;
+}
+.hab-custom-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  margin: 0 0 8px;
+}
+.hab-custom-row {
+  display: flex;
+  gap: 8px;
+}
+.hab-custom-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13px;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.15s;
+}
+.hab-custom-input:focus { border-color: #003DA5; }
+.hab-btn-añadir,
+.hab-custom-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 14px;
+  background: #003DA5;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.hab-custom-btn:hover { background: #002d7a; }
+
+/* ── Preview seleccionadas ── */
+.hab-preview {
+  margin-top: 14px;
+  padding: 12px;
+  background: #f8fafc;
+  border-radius: 9px;
+  border: 1px solid #e2e8f0;
+}
+.hab-preview-titulo {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin: 0 0 8px;
+}
+.hab-preview-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.hab-tag-quitar {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: opacity 0.15s;
+}
+.hab-tag-quitar:hover { opacity: .75; }

@@ -7,7 +7,8 @@ import Navbar from "../components/Navbar.jsx";
 import "../stylesheets/Perfil.css";
 
 import { FiEdit2, FiPlus, FiTrash2, FiArrowUp, FiArrowDown, FiX, FiCheck,
-  FiMapPin, FiPhone, FiMail, FiCalendar, FiLinkedin, FiGithub, FiExternalLink } from "react-icons/fi";
+  FiMapPin, FiPhone, FiMail, FiCalendar, FiLinkedin, FiGithub, FiExternalLink,
+  FiSearch } from "react-icons/fi";
 import { MdWorkOutline, MdSchool, MdLanguage, MdMenuBook, MdRocketLaunch, MdBolt } from "react-icons/md";
 import { HiOutlineBriefcase } from "react-icons/hi";
 import { BsBuilding, BsTrophy, BsBank2 } from "react-icons/bs";
@@ -904,22 +905,307 @@ function ModalCurso({ abierto, onCerrar, perfil, onGuardar, modoEdicion=false, i
   );
 }
 
-/* ══ MODAL HABILIDADES ══ */
+/* ═══════════════════════════════════════════════════════════
+   CATÁLOGO PREDEFINIDO DE SKILLS — normalizado en Title Case
+   Esto garantiza consistencia en Firestore y en los filtros.
+═══════════════════════════════════════════════════════════ */
+const SKILLS_TECNICAS_PREDEFINIDAS = {
+  "Programación": [
+    "Python","JavaScript","TypeScript","Java","C++","C#","Kotlin","Swift",
+    "Go","Rust","PHP","Ruby","R","Scala","MATLAB",
+  ],
+  "Web & Mobile": [
+    "React","React Native","Angular","Vue.js","Next.js","Node.js",
+    "Express","Django","FastAPI","Spring Boot","Flutter","Ionic",
+  ],
+  "Datos & IA": [
+    "SQL","Power BI","Tableau","Excel Avanzado","Machine Learning",
+    "Deep Learning","TensorFlow","PyTorch","Pandas","NumPy",
+    "Data Science","Big Data","Spark","ETL","Looker Studio",
+  ],
+  "Cloud & DevOps": [
+    "AWS","Azure","Google Cloud","Docker","Kubernetes","Git",
+    "CI/CD","Linux","Firebase","Terraform",
+  ],
+  "Diseño & UX": [
+    "Figma","Adobe XD","Photoshop","Illustrator","UX Research",
+    "UI Design","Prototyping",
+  ],
+  "Herramientas": [
+    "SAP","Salesforce","Jira","Confluence","Notion","Trello",
+    "Power Automate","Postman","Excel","Word","PowerPoint",
+  ],
+  "Finanzas & Negocios": [
+    "Análisis Financiero","Contabilidad","Auditoría","Bloomberg",
+    "Gestión de Riesgos","Finanzas Corporativas","Mercado de Capitales",
+  ],
+};
+
+const HABILIDADES_BLANDAS_PREDEFINIDAS = [
+  "Liderazgo","Trabajo en equipo","Comunicación efectiva","Pensamiento crítico",
+  "Resolución de problemas","Adaptabilidad","Gestión del tiempo","Creatividad",
+  "Orientación a resultados","Inteligencia emocional","Proactividad","Empatía",
+  "Negociación","Presentaciones","Toma de decisiones","Aprendizaje continuo",
+  "Atención al detalle","Organización","Colaboración","Mentoría",
+];
+
+/* Normaliza un string: quita espacios, hace Title Case */
+const normalizar = (s) =>
+  s.trim().replace(/\w+/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+
+/* ══ MODAL HABILIDADES — con selector predefinido ══ */
 function ModalHab({ abierto, onCerrar, perfil, onGuardar }) {
-  const [skills,setSkills]=useState((perfil?.skills||[]).join(", "));const [blandas,setBlandas]=useState((perfil?.habilidadesBlandas||[]).join(", "));
-  useEffect(()=>{ setSkills((perfil?.skills||[]).join(", "));setBlandas((perfil?.habilidadesBlandas||[]).join(", ")); },[perfil]);
-  const guardar=async()=>{
-    const s=skills.split(",").map(x=>x.trim()).filter(Boolean);const b=blandas.split(",").map(x=>x.trim()).filter(Boolean);
-    if(!s.length&&!b.length){Swal.fire({icon:"warning",title:"Añade al menos una habilidad",confirmButtonColor:"#003DA5"});return;}
-    await onGuardar({skills:s,habilidadesBlandas:b});onCerrar();
+  const [selTec,    setSelTec]    = useState(perfil?.skills           || []);
+  const [selBla,    setSelBla]    = useState(perfil?.habilidadesBlandas || []);
+  const [customTec, setCustomTec] = useState("");
+  const [customBla, setCustomBla] = useState("");
+  const [tabHab,    setTabHab]    = useState("tecnicas");
+  const [busqTec,   setBusqTec]   = useState("");
+  const [busqBla,   setBusqBla]   = useState("");
+
+  useEffect(() => {
+    setSelTec(perfil?.skills           || []);
+    setSelBla(perfil?.habilidadesBlandas || []);
+  }, [perfil, abierto]);
+
+  /* Toggle técnica */
+  const tglTec = (skill) =>
+    setSelTec((prev) =>
+      prev.includes(skill) ? prev.filter((s) => s !== skill) : [...prev, skill]
+    );
+
+  /* Toggle blanda */
+  const tglBla = (skill) =>
+    setSelBla((prev) =>
+      prev.includes(skill) ? prev.filter((s) => s !== skill) : [...prev, skill]
+    );
+
+  /* Añadir skill personalizada técnica */
+  const addCustomTec = () => {
+    const val = normalizar(customTec);
+    if (!val) return;
+    /* buscar si ya existe con nombre similar (case-insensitive) */
+    const yaExiste = selTec.some((s) => s.toLowerCase() === val.toLowerCase());
+    if (yaExiste) {
+      Swal.fire({ icon:"warning", title:"Esa skill ya está en tu lista", confirmButtonColor:"#003DA5" });
+      return;
+    }
+    /* buscar si hay una versión predefinida */
+    const predefinida = Object.values(SKILLS_TECNICAS_PREDEFINIDAS)
+      .flat()
+      .find((s) => s.toLowerCase() === val.toLowerCase());
+    setSelTec((prev) => [...prev, predefinida || val]);
+    setCustomTec("");
   };
+
+  /* Añadir habilidad blanda personalizada */
+  const addCustomBla = () => {
+    const val = normalizar(customBla);
+    if (!val) return;
+    const yaExiste = selBla.some((s) => s.toLowerCase() === val.toLowerCase());
+    if (yaExiste) {
+      Swal.fire({ icon:"warning", title:"Esa habilidad ya está en tu lista", confirmButtonColor:"#003DA5" });
+      return;
+    }
+    const predefinida = HABILIDADES_BLANDAS_PREDEFINIDAS
+      .find((s) => s.toLowerCase() === val.toLowerCase());
+    setSelBla((prev) => [...prev, predefinida || val]);
+    setCustomBla("");
+  };
+
+  const guardar = async () => {
+    if (!selTec.length && !selBla.length) {
+      Swal.fire({ icon:"warning", title:"Añade al menos una habilidad", confirmButtonColor:"#003DA5" });
+      return;
+    }
+    await onGuardar({ skills: selTec, habilidadesBlandas: selBla });
+    onCerrar();
+  };
+
+  /* Filtrar skills predefinidas por búsqueda */
+  const categsFiltradas = Object.entries(SKILLS_TECNICAS_PREDEFINIDAS).reduce((acc, [cat, items]) => {
+    const filtrados = items.filter((s) => s.toLowerCase().includes(busqTec.toLowerCase()));
+    if (filtrados.length > 0) acc[cat] = filtrados;
+    return acc;
+  }, {});
+
+  const blasFiltradas = HABILIDADES_BLANDAS_PREDEFINIDAS.filter((s) =>
+    s.toLowerCase().includes(busqBla.toLowerCase())
+  );
+
   return (
     <Modal abierto={abierto} onCerrar={onCerrar} titulo="Editar habilidades">
-      <FG label="Habilidades técnicas" hint="Separa con comas"><Txt rows={3} placeholder="React, Firebase, Python, SQL..." value={skills} onChange={e=>setSkills(e.target.value)}/></FG>
-      {skills.length>0&&<div className="preview-tags">{skills.split(",").filter(Boolean).map((s,i)=><span key={i} className="tag tag-tecnico">{s.trim()}</span>)}</div>}
-      <FG label="Habilidades blandas" hint="Separa con comas" style={{marginTop:14}}><Txt rows={3} placeholder="Liderazgo, Trabajo en equipo..." value={blandas} onChange={e=>setBlandas(e.target.value)}/></FG>
-      {blandas.length>0&&<div className="preview-tags">{blandas.split(",").filter(Boolean).map((s,i)=><span key={i} className="tag tag-blando">{s.trim()}</span>)}</div>}
-      <MFooter onCerrar={onCerrar} onGuardar={guardar}/>
+
+      {/* Tabs */}
+      <div className="hab-tabs">
+        <button
+          className={`hab-tab ${tabHab === "tecnicas" ? "hab-tab-activo" : ""}`}
+          onClick={() => setTabHab("tecnicas")}
+        >
+          Técnicas
+          {selTec.length > 0 && <span className="hab-tab-badge">{selTec.length}</span>}
+        </button>
+        <button
+          className={`hab-tab ${tabHab === "blandas" ? "hab-tab-activo" : ""}`}
+          onClick={() => setTabHab("blandas")}
+        >
+          Blandas
+          {selBla.length > 0 && <span className="hab-tab-badge">{selBla.length}</span>}
+        </button>
+      </div>
+
+      {/* ── TAB TÉCNICAS ── */}
+      {tabHab === "tecnicas" && (
+        <div>
+          <p className="hab-hint">Selecciona de la lista o añade una personalizada. Las skills se normalizan automáticamente para evitar duplicados.</p>
+
+          {/* Buscador */}
+          <div className="hab-search-wrap">
+            <FiSearch size={13} color="#94a3b8"/>
+            <input
+              className="hab-search"
+              placeholder="Buscar skill..."
+              value={busqTec}
+              onChange={(e) => setBusqTec(e.target.value)}
+            />
+            {busqTec && (
+              <button className="hab-search-clear" onClick={() => setBusqTec("")}>
+                <FiX size={11}/>
+              </button>
+            )}
+          </div>
+
+          {/* Categorías */}
+          <div className="hab-categorias">
+            {Object.entries(categsFiltradas).map(([cat, items]) => (
+              <div key={cat} className="hab-categoria">
+                <p className="hab-cat-titulo">{cat}</p>
+                <div className="hab-chips-wrap">
+                  {items.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      className={`hab-chip ${selTec.includes(s) ? "hab-chip-activo" : ""}`}
+                      onClick={() => tglTec(s)}
+                    >
+                      {s}
+                      {selTec.includes(s) && <FiX size={10} style={{ marginLeft: 4 }}/>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {Object.keys(categsFiltradas).length === 0 && busqTec && (
+              <p className="hab-empty">No se encontró "{busqTec}" en las predefinidas. Puedes añadirla abajo.</p>
+            )}
+          </div>
+
+          {/* Añadir skill personalizada */}
+          <div className="hab-custom-wrap">
+            <p className="hab-custom-label">¿No encuentras tu skill? Añádela:</p>
+            <div className="hab-custom-row">
+              <input
+                className="hab-custom-input"
+                placeholder="Ej: Looker, Snowflake, Unreal Engine..."
+                value={customTec}
+                onChange={(e) => setCustomTec(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addCustomTec()}
+              />
+              <button className="hab-custom-btn" onClick={addCustomTec}>
+                <FiPlus size={14}/> Añadir
+              </button>
+            </div>
+          </div>
+
+          {/* Preview seleccionadas */}
+          {selTec.length > 0 && (
+            <div className="hab-preview">
+              <p className="hab-preview-titulo">Seleccionadas ({selTec.length})</p>
+              <div className="hab-preview-tags">
+                {selTec.map((s) => (
+                  <span key={s} className="tag tag-tecnico hab-tag-quitar" onClick={() => tglTec(s)}>
+                    {s} <FiX size={10}/>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── TAB BLANDAS ── */}
+      {tabHab === "blandas" && (
+        <div>
+          <p className="hab-hint">Selecciona tus competencias interpersonales más destacadas.</p>
+
+          {/* Buscador */}
+          <div className="hab-search-wrap">
+            <FiSearch size={13} color="#94a3b8"/>
+            <input
+              className="hab-search"
+              placeholder="Buscar habilidad blanda..."
+              value={busqBla}
+              onChange={(e) => setBusqBla(e.target.value)}
+            />
+            {busqBla && (
+              <button className="hab-search-clear" onClick={() => setBusqBla("")}>
+                <FiX size={11}/>
+              </button>
+            )}
+          </div>
+
+          {/* Chips */}
+          <div className="hab-chips-wrap" style={{ marginTop: 10 }}>
+            {blasFiltradas.map((s) => (
+              <button
+                key={s}
+                type="button"
+                className={`hab-chip hab-chip-bla ${selBla.includes(s) ? "hab-chip-bla-activo" : ""}`}
+                onClick={() => tglBla(s)}
+              >
+                {s}
+                {selBla.includes(s) && <FiX size={10} style={{ marginLeft: 4 }}/>}
+              </button>
+            ))}
+            {blasFiltradas.length === 0 && (
+              <p className="hab-empty">Sin resultados. Puedes añadirla abajo.</p>
+            )}
+          </div>
+
+          {/* Añadir personalizada */}
+          <div className="hab-custom-wrap">
+            <p className="hab-custom-label">¿No la encuentras? Añádela:</p>
+            <div className="hab-custom-row">
+              <input
+                className="hab-custom-input"
+                placeholder="Ej: Facilitación, Coaching..."
+                value={customBla}
+                onChange={(e) => setCustomBla(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addCustomBla()}
+              />
+              <button className="hab-custom-btn" onClick={addCustomBla}>
+                <FiPlus size={14}/> Añadir
+              </button>
+            </div>
+          </div>
+
+          {/* Preview */}
+          {selBla.length > 0 && (
+            <div className="hab-preview">
+              <p className="hab-preview-titulo">Seleccionadas ({selBla.length})</p>
+              <div className="hab-preview-tags">
+                {selBla.map((s) => (
+                  <span key={s} className="tag tag-blando hab-tag-quitar" onClick={() => tglBla(s)}>
+                    {s} <FiX size={10}/>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      <MFooter onCerrar={onCerrar} onGuardar={guardar} label="Guardar habilidades"/>
     </Modal>
   );
 }
