@@ -105,9 +105,9 @@ function Perfil() {
         const nvo = calcCompletitud(nuevoPerfil);
         prevComp.current = nvo;
         if (nvo === 100 && ant < 100) {
-          Swal.fire({ icon:"success", title:"🎉 ¡Perfil al 100%!", text:"Tienes máxima visibilidad en el catálogo.", confirmButtonColor:"#003DA5" });
+          Swal.fire({ icon:"success", title:"¡Perfil al 100%!", text:"Tienes máxima visibilidad en el catálogo.", confirmButtonColor:"#003DA5" });
         } else if (nvo >= 70 && ant < 70) {
-          Swal.fire({ icon:"info", title:"✅ ¡Ya apareces en el catálogo!", text:"Tu perfil llegó al 70%. Los líderes ya pueden encontrarte.", confirmButtonColor:"#003DA5", timer:4000 });
+          Swal.fire({ icon:"info", title:"¡Ya apareces en el catálogo!", text:"Tu perfil llegó al 70%. Los líderes ya pueden encontrarte.", confirmButtonColor:"#003DA5", timer:4000 });
         } else {
           Swal.fire({ icon:"success", title:"¡Guardado!", timer:1600, showConfirmButton:false });
         }
@@ -154,8 +154,8 @@ function Perfil() {
               <div className="barra-progreso-fill" style={{ width:`${comp}%` }} />
             </div>
             <span className="completitud-numero">{comp}%</span>
-            {comp < 100 && <p className="completitud-tip">Completa tu perfil para aparecer primero en el catálogo</p>}
-            {comp === 100 && <p className="completitud-tip completitud-ok">🎉 ¡Perfil al 100%!</p>}
+            {comp < 100 && <p className="completitud-tip">Completa tu perfil para aparecer en el catálogo</p>}
+            {comp === 100 && <p className="completitud-tip completitud-ok">¡Perfil al 100%!</p>}
           </div>
 
           <div className="sidebar-card">
@@ -634,7 +634,7 @@ function ModalRotacion({ abierto, onCerrar, perfil, onGuardar, modoEdicion=false
   };
 
   return (
-    <Modal abierto={abierto} onCerrar={onCerrar} titulo={modoEdicion?"✏️ Editar rotación":"🏦 Añadir área del BCP"}>
+    <Modal abierto={abierto} onCerrar={onCerrar} titulo={modoEdicion?"Editar rotación":"Añadir área del BCP"}>
       <div className="rot-modal-info">
         Registra las áreas del banco por las que has rotado. Esta sección es exclusiva para tu trayectoria interna en el BCP.
       </div>
@@ -690,7 +690,7 @@ function ModalHeader({ abierto, onCerrar, perfil, onGuardar }) {
     await onGuardar({ nombre, apellidos, titulo, area, resumen, intereses, perfilCompleto:true }); onCerrar();
   };
   return (
-    <Modal abierto={abierto} onCerrar={onCerrar} titulo="✏️ Editar información principal">
+    <Modal abierto={abierto} onCerrar={onCerrar} titulo="Editar información principal">
       <FRow><FG label="Nombre *"><Inp placeholder="Tu nombre" value={nombre} onChange={e=>setNombre(e.target.value)}/></FG>
       <FG label="Apellidos"><Inp placeholder="Tus apellidos" value={apellidos} onChange={e=>setApellidos(e.target.value)}/></FG></FRow>
       <FG label="Título profesional *"><Inp placeholder="Ej: Desarrolladora Web Junior | Analista de Datos" value={titulo} onChange={e=>setTitulo(e.target.value)}/></FG>
@@ -724,7 +724,7 @@ function ModalDatos({ abierto, onCerrar, perfil, onGuardar }) {
   const [github, setGithub]       = useState(perfil?.github||"");
   useEffect(()=>{ setTelefono(perfil?.telefono||"");setPais(perfil?.pais||"Perú");setCiudad(perfil?.ciudad||"");setDistrito(perfil?.distrito||"");setFechaNac(perfil?.fechaNacimiento||"");setGenero(perfil?.genero||"");setLinkedin(perfil?.linkedin||"");setGithub(perfil?.github||""); },[perfil]);
   return (
-    <Modal abierto={abierto} onCerrar={onCerrar} titulo="👤 Datos personales">
+    <Modal abierto={abierto} onCerrar={onCerrar} titulo="Datos personales">
       <FRow><FG label="Teléfono"><Inp placeholder="+51 999 999 999" value={telefono} onChange={e=>setTelefono(e.target.value)}/></FG>
       <FG label="Género"><Sel value={genero} onChange={e=>setGenero(e.target.value)}><option value="">Selecciona</option><option>Hombre</option><option>Mujer</option><option>Prefiero no decir</option><option>Otro</option></Sel></FG></FRow>
       <FG label="Fecha de nacimiento"><input type="date" className="form-input" value={fechaNac} onChange={e=>setFechaNac(e.target.value)}/></FG>
@@ -745,7 +745,7 @@ function ModalMovilidad({ abierto, onCerrar, perfil, onGuardar }) {
   const [vehiculo,setVehiculo]= useState(perfil?.movilidad?.vehiculo||false);
   useEffect(()=>{ setViajar(perfil?.movilidad?.viajar||false);setReubic(perfil?.movilidad?.reubicacion||false);setVehiculo(perfil?.movilidad?.vehiculo||false); },[perfil]);
   return (
-    <Modal abierto={abierto} onCerrar={onCerrar} titulo="🚗 Editar movilidad">
+    <Modal abierto={abierto} onCerrar={onCerrar} titulo="Editar movilidad">
       <div className="movilidad-opciones">
         <Toggle label="Disponible para viajar" desc="Puedo desplazarme a otras ciudades" val={viajar} onChange={setViajar}/>
         <Toggle label="Disponible para reubicación" desc="Dispuesto/a a cambiar de ciudad" val={reubic} onChange={setReubic}/>
@@ -784,7 +784,7 @@ function ModalExp({ abierto, onCerrar, perfil, onGuardar, modoEdicion=false, ite
     setLoading(false);onCerrar();
   };
   return (
-    <Modal abierto={abierto} onCerrar={onCerrar} titulo={modoEdicion?"✏️ Editar experiencia":"💼 Añadir experiencia"}>
+    <Modal abierto={abierto} onCerrar={onCerrar} titulo={modoEdicion?"Editar experiencia":"Añadir experiencia"}>
       <FG label="Cargo *"><Inp placeholder="Ej: Practicante de Desarrollo Web" value={cargo} onChange={e=>setCargo(e.target.value)}/></FG>
       <FG label="Empresa u organización"><Inp placeholder="Ej: BCP, UNICEF, Proyecto académico" value={empresa} onChange={e=>setEmpresa(e.target.value)}/></FG>
       <Chk checked={actual} onChange={setActual} label="Trabajo aquí actualmente"/>
@@ -813,7 +813,7 @@ function ModalProy({ abierto, onCerrar, perfil, onGuardar, modoEdicion=false, it
     setLoading(false);onCerrar();
   };
   return (
-    <Modal abierto={abierto} onCerrar={onCerrar} titulo={modoEdicion?"✏️ Editar proyecto":"🚀 Añadir proyecto"}>
+    <Modal abierto={abierto} onCerrar={onCerrar} titulo={modoEdicion?"Editar proyecto":"Añadir proyecto"}>
       <FG label="Nombre *"><Inp placeholder="Ej: TalentoBCP, App de Trivia..." value={nombre} onChange={e=>setNombre(e.target.value)}/></FG>
       <FG label="Tu rol"><Inp placeholder="Ej: Desarrolladora Frontend" value={rol} onChange={e=>setRol(e.target.value)}/></FG>
       <FG label="Descripción"><Txt rows={3} maxLength={300} placeholder="¿Qué resolviste? ¿Cuál fue el impacto?" value={desc} onChange={e=>setDesc(e.target.value)}/><span className="form-contador">{desc.length}/300</span></FG>
@@ -843,7 +843,7 @@ function ModalEdu({ abierto, onCerrar, perfil, onGuardar, modoEdicion=false, ite
     setLoading(false);onCerrar();
   };
   return (
-    <Modal abierto={abierto} onCerrar={onCerrar} titulo={modoEdicion?"✏️ Editar formación":"🎓 Añadir formación"}>
+    <Modal abierto={abierto} onCerrar={onCerrar} titulo={modoEdicion?"Editar formación":"Añadir formación"}>
       <FG label="Institución *"><Inp placeholder="Ej: CIBERTEC, PUCP, UPC..." value={inst} onChange={e=>setInst(e.target.value)}/></FG>
       <FG label="Carrera / Programa"><Inp placeholder="Ej: Computación e Informática" value={carrera} onChange={e=>setCarrera(e.target.value)}/></FG>
       <FG label="Nivel"><Sel value={nivel} onChange={e=>setNivel(e.target.value)}><option value="">Selecciona nivel</option>{NIVELES_EDUCACION.map(n=><option key={n}>{n}</option>)}</Sel></FG>
@@ -869,7 +869,7 @@ function ModalIdiomas({ abierto, onCerrar, perfil, onGuardar }) {
   const eliminar=(i)=>setLista(lista.filter((_,j)=>j!==i));
   const cambiarNivel=(i,v)=>{ const n=[...lista];n[i]={...n[i],nivel:v};setLista(n); };
   return (
-    <Modal abierto={abierto} onCerrar={onCerrar} titulo="🌍 Idiomas">
+    <Modal abierto={abierto} onCerrar={onCerrar} titulo="Idiomas">
       {lista.length>0&&(<div className="idiomas-editar-lista">{lista.map((l,i)=>(<div key={i} className="idioma-editar-row"><span className="idioma-nombre">{l.idioma}</span><select className="form-input idioma-nivel-select" value={l.nivel} onChange={e=>cambiarNivel(i,e.target.value)}>{NIVELES_IDIOMA.map(n=><option key={n}>{n}</option>)}</select><button className="btn-eliminar" onClick={()=>eliminar(i)}><FiTrash2 size={12}/></button></div>))}</div>)}
       <p className="form-sublabel" style={{marginTop:lista.length>0?16:0}}>Agregar idioma</p>
       <FRow><FG label="Idioma"><Sel value={nuevoId} onChange={e=>setNuevoId(e.target.value)}><option value="">Selecciona</option>{IDIOMAS_LISTA.map(id=><option key={id}>{id}</option>)}</Sel></FG>
@@ -894,7 +894,7 @@ function ModalCurso({ abierto, onCerrar, perfil, onGuardar, modoEdicion=false, i
     setLoading(false);onCerrar();
   };
   return (
-    <Modal abierto={abierto} onCerrar={onCerrar} titulo={modoEdicion?"✏️ Editar curso":"📚 Añadir curso o certificado"}>
+    <Modal abierto={abierto} onCerrar={onCerrar} titulo={modoEdicion?"Editar curso":"Añadir curso o certificado"}>
       <FG label="Tipo"><div className="tipo-tabs">{["Curso","Certificado","Programa","Diplomado","Bootcamp"].map(t=><button key={t} className={`tipo-tab ${tipo===t?"tipo-tab-activo":""}`} onClick={()=>setTipo(t)}>{t}</button>)}</div></FG>
       <FG label="Nombre *"><Inp placeholder="Ej: Google Data Analytics, AWS..." value={nombre} onChange={e=>setNombre(e.target.value)}/></FG>
       <FG label="Institución / Plataforma"><Inp placeholder="Ej: Coursera, Udemy, BCP..." value={inst} onChange={e=>setInst(e.target.value)}/></FG>
@@ -914,7 +914,7 @@ function ModalHab({ abierto, onCerrar, perfil, onGuardar }) {
     await onGuardar({skills:s,habilidadesBlandas:b});onCerrar();
   };
   return (
-    <Modal abierto={abierto} onCerrar={onCerrar} titulo="⚡ Editar habilidades">
+    <Modal abierto={abierto} onCerrar={onCerrar} titulo="Editar habilidades">
       <FG label="Habilidades técnicas" hint="Separa con comas"><Txt rows={3} placeholder="React, Firebase, Python, SQL..." value={skills} onChange={e=>setSkills(e.target.value)}/></FG>
       {skills.length>0&&<div className="preview-tags">{skills.split(",").filter(Boolean).map((s,i)=><span key={i} className="tag tag-tecnico">{s.trim()}</span>)}</div>}
       <FG label="Habilidades blandas" hint="Separa con comas" style={{marginTop:14}}><Txt rows={3} placeholder="Liderazgo, Trabajo en equipo..." value={blandas} onChange={e=>setBlandas(e.target.value)}/></FG>

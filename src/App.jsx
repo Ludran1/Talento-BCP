@@ -13,14 +13,11 @@ import Navbar from "./components/Navbar";
 function Layout() {
   const location = useLocation();
 
-  // 👇 aquí defines dónde NO quieres navbar/topbar
-  const hideLayout =
-    location.pathname === "/auth" ||
-    location.pathname === "/auth-lider";
+  const hideLayout = location.pathname === "/auth" ;
 
   return (
     <>
-      {!hideLayout && <Topbar />}
+      {/* {!hideLayout && <Topbar />} */}
       {!hideLayout && <Navbar />}
 
       <Routes>

@@ -1,0 +1,450 @@
+.ds-container{
+  padding:20px;
+  max-width:1100px;
+  margin:auto;
+}
+
+/* TITULO */
+.ds-title{
+  font-size:22px;
+  margin-bottom:20px;
+}
+
+/* KPIs */
+.ds-kpis{
+  display:flex;
+  gap:10px;
+  margin-bottom:20px;
+}
+
+.ds-card{
+  flex:1;
+  background:#fff;
+  padding:15px;
+  border-radius:10px;
+  box-shadow:0 2px 6px rgba(0,0,0,0.05);
+  text-align:center;
+}
+
+.ds-card h2{
+  margin:5px 0;
+  color:#003DA5;
+}
+
+/* SECCIONES */
+.ds-section{
+  background:#fff;
+  padding:15px;
+  border-radius:10px;
+  margin-bottom:20px;
+}
+
+/* BARRAS */
+.ds-bar{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:8px;
+}
+
+.ds-bar-bg{
+  flex:1;
+  height:8px;
+  background:#eee;
+  border-radius:5px;
+}
+
+.ds-bar-bg div{
+  height:100%;
+  background:#003DA5;
+  border-radius:5px;
+}
+
+/* GRID */
+.ds-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+  gap:10px;
+}
+
+/* CARD */
+.ds-user-card{
+  border:1px solid #eee;
+  padding:10px;
+  border-radius:10px;
+}
+
+.ds-tags span{
+  background:#003DA5;
+  color:#fff;
+  padding:3px 6px;
+  border-radius:5px;
+  font-size:11px;
+  margin-right:4px;
+}
+
+/* BOTON */
+button{
+  margin-top:10px;
+  width:100%;
+  background:#003DA5;
+  color:#fff;
+  border:none;
+  padding:6px;
+  border-radius:6px;
+  cursor:pointer;
+}
+
+
+/* Sidebar footer */
+.dl-sidebar-footer {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+}
+.dl-btn-catalogo { color: #93c5fd !important; }
+.dl-btn-salir    { color: #fca5a5 !important; }
+
+/* Nueva vacante topbar button */
+.dl-btn-nueva-vacante {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: #003DA5;
+  color: white;
+  border: none;
+  border-radius: 9px;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+.dl-btn-nueva-vacante:hover { background: #002d7a; }
+
+/* Resumen pills */
+.vac-resumen-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.vac-resumen-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 20px;
+  border-radius: 10px;
+  border: 2px solid;
+  background: white;
+  min-width: 90px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.vac-resumen-val {
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1;
+}
+.vac-resumen-label {
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 4px;
+  font-weight: 600;
+}
+
+/* Vacantes grid */
+.vac-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+/* Vacante card */
+.vac-card {
+  background: white;
+  border-radius: 14px;
+  padding: 18px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  border: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: box-shadow 0.2s;
+}
+.vac-card:hover { box-shadow: 0 4px 16px rgba(0,61,165,0.1); }
+
+.vac-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.vac-card-titulo {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 3px;
+  line-height: 1.3;
+}
+.vac-card-area {
+  font-size: 12px;
+  color: #003DA5;
+  font-weight: 600;
+  margin: 0;
+}
+
+.vac-estado-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  user-select: none;
+  flex-shrink: 0;
+}
+.vac-estado-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.vac-estado-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  z-index: 100;
+  overflow: hidden;
+  min-width: 120px;
+}
+.vac-estado-menu button {
+  display: block;
+  width: 100%;
+  padding: 9px 14px;
+  text-align: left;
+  border: none;
+  background: none;
+  font-size: 13px;
+  cursor: pointer;
+  color: #374151;
+}
+.vac-estado-menu button:hover { background: #f3f4f6; }
+
+.vac-card-meta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: #6b7280;
+}
+.vac-card-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.vac-card-desc {
+  font-size: 13px;
+  color: #374151;
+  line-height: 1.5;
+  margin: 0;
+}
+.vac-card-req {
+  font-size: 12px;
+  color: #6b7280;
+  background: #f9fafb;
+  border-radius: 7px;
+  padding: 8px 10px;
+}
+.vac-card-req strong { color: #374151; }
+.vac-card-req p { margin: 3px 0 0; }
+
+.vac-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.vac-btn-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 14px;
+  border-radius: 7px;
+  border: 1.5px solid #003DA5;
+  background: transparent;
+  color: #003DA5;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.vac-btn-edit:hover { background: #eff6ff; }
+
+.vac-btn-del {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 14px;
+  border-radius: 7px;
+  border: 1.5px solid #fecaca;
+  background: transparent;
+  color: #dc2626;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.vac-btn-del:hover { background: #fef2f2; }
+
+/* Modal vacante */
+.vac-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.vac-modal {
+  background: white;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 680px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+  overflow: hidden;
+}
+.vac-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+.vac-modal-header h3 { margin: 0; font-size: 17px; color: #111827; font-weight: 700; }
+.vac-modal-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #9ca3af;
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+}
+.vac-modal-close:hover { background: #f3f4f6; color: #374151; }
+
+.vac-modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.vac-form-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.vac-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+  min-width: 140px;
+}
+.vac-form-group-lg { flex: 2; }
+.vac-form-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+}
+.vac-form-group input,
+.vac-form-group select,
+.vac-form-group textarea {
+  padding: 9px 12px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+  resize: vertical;
+  font-family: inherit;
+}
+.vac-form-group input:focus,
+.vac-form-group select:focus,
+.vac-form-group textarea:focus { border-color: #003DA5; }
+
+.vac-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+  border-top: 1px solid #e5e7eb;
+}
+.vac-btn-cancel {
+  padding: 9px 18px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 8px;
+  background: white;
+  font-size: 13px;
+  cursor: pointer;
+  color: #374151;
+  font-weight: 600;
+}
+.vac-btn-cancel:hover { background: #f9fafb; }
+
+.vac-btn-guardar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 20px;
+  background: #003DA5;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.vac-btn-guardar:hover:not(:disabled) { background: #002d7a; }
+.vac-btn-guardar:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Confirm delete */
+.vac-confirm-modal {
+  background: white;
+  border-radius: 16px;
+  padding: 28px 24px;
+  max-width: 380px;
+  width: 100%;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+}
+.vac-confirm-modal h4 { margin: 0; font-size: 17px; }
+.vac-confirm-modal p  { margin: 0; font-size: 13px; color: #6b7280; }
+.vac-confirm-actions { display: flex; gap: 10px; margin-top: 8px; }
+.vac-btn-delete {
+  padding: 9px 20px;
+  background: #dc2626;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.vac-btn-delete:hover { background: #b91c1c; }

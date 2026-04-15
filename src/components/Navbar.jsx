@@ -49,7 +49,7 @@ function Navbar() {
 
         <Link to="/catalogo" className="nav-link">
           <FaUsers className="icon-btn" />
-          Talento
+          Buscar Talento
         </Link>
 
         {user ? (

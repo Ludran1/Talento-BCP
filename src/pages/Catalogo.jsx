@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { db, auth } from "../firebase/firebase";
 import {
   collection, getDocs, doc, getDoc,
@@ -7,28 +7,26 @@ import {
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
-import Navbar from "../components/Navbar.jsx";
 import Filtros from "./Filtros.jsx";
+import Navbar from "../components/Navbar.jsx";
 import "../stylesheets/Catalogo.css";
 
 import {
   FiMapPin, FiStar, FiMail, FiPhone, FiArrowLeft,
-  FiExternalLink, FiLinkedin, FiGithub, FiX,
+  FiExternalLink, FiX, FiFilter,
 } from "react-icons/fi";
 import {
-  MdSchool, MdLanguage, MdRocketLaunch, MdBolt,
-  MdWorkOutline, MdMenuBook,
+  MdSchool, MdLanguage, MdRocketLaunch, MdBolt, MdMenuBook,
 } from "react-icons/md";
-import {
-  HiOutlineBriefcase, HiOutlineOfficeBuilding,
-} from "react-icons/hi";
-import { BsTrophy, BsBuilding } from "react-icons/bs";
+import { HiOutlineBriefcase, HiOutlineOfficeBuilding } from "react-icons/hi";
+import { BsTrophy } from "react-icons/bs";
 import { TbCertificate } from "react-icons/tb";
-import { IoSearchOutline, IoFilterOutline } from "react-icons/io5";
+import { IoSearchOutline } from "react-icons/io5";
 import { RiTeamLine } from "react-icons/ri";
 import { AiOutlineSafety } from "react-icons/ai";
+import { FaLinkedin, FaGithub } from "react-icons/fa";
 
-/* ── Completitud ── */
+/* ── helpers ── */
 const calcComp = (p) => {
   const c = [
     p.titulo, p.resumen, p.area, p.intereses,
@@ -55,32 +53,34 @@ const calcMesesExp = (experiencia = []) => {
     const hasta = e.actualmente
       ? ahora
       : e.hastaA ? new Date(Number(e.hastaA), MESES_MAP[e.hastaM] ?? 0) : null;
-    if (desde && hasta && hasta >= desde) {
-      total += (hasta.getFullYear() - desde.getFullYear()) * 12
-             + (hasta.getMonth() - desde.getMonth());
-    }
+    if (desde && hasta && hasta >= desde)
+      total += (hasta.getFullYear() - desde.getFullYear()) * 12 + (hasta.getMonth() - desde.getMonth());
   });
   return total;
 };
-
-const rangoExp = (meses) => {
-  if (meses <= 0)  return null;
-  if (meses <= 3)  return "1–3 meses";
-  if (meses <= 6)  return "4–6 meses";
-  if (meses <= 12) return "6–12 meses";
+const rangoExp = (m) => {
+  if (m <= 0)  return null;
+  if (m <= 3)  return "1–3 meses";
+  if (m <= 6)  return "4–6 meses";
+  if (m <= 12) return "6–12 meses";
   return "+12 meses";
 };
 
+/* ── Estado inicial de filtros ──
+   IMPORTANTE: usa "rotaciones" (campo real en Firestore),
+   NO "areasRotacion" (nombre incorrecto anterior).           */
 const FILTROS_INIT = {
-  busqueda:          "",
-  areasActuales:     [],
-  areasAnteriores:   [],
-  skills:            [],
-  idiomas:           [],
-  nivelEducacion:    [],
-  soloFavoritos:     false,
-  soloConProyectos:  false,
-  soloConRotaciones: false,
+  busqueda: "",
+  areasActuales:    [],   // filtra por p.area
+  areasAnteriores:  [],   // filtra por p.rotaciones[].area
+  skills:           [],
+  idiomas:          [],
+  nivelEducacion:   [],
+  generos:          [],
+  ubicaciones:      [],   // filtra por ciudad o distrito
+  soloFavoritos:    false,
+  soloConProyectos: false,
+  soloConRotaciones:false,
 };
 
 /* ══════════════════════════════════════════
@@ -95,12 +95,11 @@ function Catalogo() {
   const [panelAbierto, setPanelAbierto] = useState(false);
   const [perfilModal,  setPerfilModal]  = useState(null);
   const [loadingModal, setLoadingModal] = useState(false);
+  const [esLider,      setEsLider]      = useState(false);
+  const [liderDocId,   setLiderDocId]   = useState(null);
+  const [favIds,       setFavIds]       = useState([]);
 
-  const [esLider,    setEsLider]    = useState(false);
-  const [liderDocId, setLiderDocId] = useState(null);
-  const [favIds,     setFavIds]     = useState([]);
-
-  /* ── Auth ── */
+  /* auth */
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) return;
@@ -118,76 +117,95 @@ function Catalogo() {
     return () => unsub();
   }, []);
 
-  /* ── Cargar perfiles ── */
+  /* cargar perfiles */
   useEffect(() => {
     const cargar = async () => {
       try {
         const snap = await getDocs(collection(db, "practicantes"));
-        setPerfiles(
-          snap.docs.map((d) => ({ id: d.id, ...d.data(), completitud: calcComp(d.data()) }))
-        );
+        setPerfiles(snap.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+          completitud: calcComp(d.data()),
+        })));
       } catch (err) { console.error(err); }
       finally { setLoading(false); }
     };
     cargar();
   }, []);
 
-  /* ── Skills únicos ── */
+  /* skills dinámicos para el panel */
   const skillsDisponibles = useMemo(() => {
     const set = new Set();
     perfiles.forEach((p) => (p.skills || []).forEach((s) => s && set.add(s.trim())));
     return [...set].sort();
   }, [perfiles]);
 
-  /* ── Filtrado ── */
+  /* ── FILTRADO ──
+     FIX PRINCIPAL: p.rotaciones (no p.areasRotacion)        */
   const filtrados = useMemo(() => {
     const txt = filtros.busqueda.toLowerCase().trim();
     return perfiles
       .filter((p) => {
         if (p.completitud < 40) return false;
 
+        /* texto libre — incluye logros de rotaciones */
         if (txt) {
           const hay = [
             p.nombre, p.titulo, p.area, p.intereses, p.distrito, p.ciudad, p.pais,
             ...(p.skills || []),
             ...(p.habilidadesBlandas || []),
-            ...(p.areasRotacion || []).map((r) => r.area + " " + (r.logros || "")),
+            /* ← campo correcto */
+            ...(p.rotaciones || []).map((r) => `${r.area} ${r.logros || ""}`),
           ].filter(Boolean).join(" ").toLowerCase();
           if (!hay.includes(txt)) return false;
         }
 
         /* área ACTUAL */
-        if (filtros.areasActuales.length > 0) {
-          if (!filtros.areasActuales.includes(p.area)) return false;
-        }
+        if (filtros.areasActuales.length > 0 && !filtros.areasActuales.includes(p.area))
+          return false;
 
-        /* área ANTERIOR — busca en areasRotacion */
+        /* área ANTERIOR ← campo correcto */
         if (filtros.areasAnteriores.length > 0) {
-          const areasRot = (p.areasRotacion || []).map((r) => r.area);
+          const areasRot = (p.rotaciones || []).map((r) => r.area);
           if (!filtros.areasAnteriores.some((a) => areasRot.includes(a))) return false;
         }
 
-        if (filtros.soloConRotaciones && !(p.areasRotacion?.length > 0)) return false;
+        /* solo con historial BCP ← campo correcto */
+        if (filtros.soloConRotaciones && !(p.rotaciones?.length > 0)) return false;
 
+        /* skills */
         if (filtros.skills.length > 0) {
-          const sp = [
-            ...(p.skills || []).map((s) => s.trim()),
-            ...(p.habilidadesBlandas || []).map((s) => s.trim()),
-          ];
+          const sp = [...(p.skills || []), ...(p.habilidadesBlandas || [])].map((s) => s.trim());
           if (!filtros.skills.some((s) => sp.includes(s))) return false;
         }
 
+        /* idiomas */
         if (filtros.idiomas.length > 0) {
           const ip = (p.idiomas || []).map((i) => i.idioma || i);
           if (!filtros.idiomas.some((i) => ip.includes(i))) return false;
         }
 
+        /* nivel educación */
         if (filtros.nivelEducacion.length > 0) {
           const np = (p.educacion || []).map((e) => e.nivel);
           if (!filtros.nivelEducacion.some((n) => np.includes(n))) return false;
         }
 
+        /* género */
+        if (filtros.generos.length > 0) {
+          if (!filtros.generos.includes(p.genero)) return false;
+        }
+
+        /* ubicación */
+        if (filtros.ubicaciones.length > 0) {
+          const ubic = [p.ciudad, p.distrito, p.pais].filter(Boolean).join(" ").toLowerCase();
+          if (!filtros.ubicaciones.some((u) => ubic.includes(u.toLowerCase()))) return false;
+        }
+
+        /* favoritos */
         if (filtros.soloFavoritos && !favIds.includes(p.id)) return false;
+
+        /* proyectos */
         if (filtros.soloConProyectos && !(p.proyectos?.length > 0)) return false;
 
         return true;
@@ -195,7 +213,7 @@ function Catalogo() {
       .sort((a, b) => b.completitud - a.completitud);
   }, [perfiles, filtros, favIds]);
 
-  /* ── Modal ── */
+  /* abrir modal rápido */
   const abrirModal = async (p) => {
     setPerfilModal(p);
     setLoadingModal(true);
@@ -207,7 +225,7 @@ function Catalogo() {
     finally { setLoadingModal(false); }
   };
 
-  /* ── Favorito ── */
+  /* toggle favorito */
   const toggleFav = async (e, pid) => {
     e.stopPropagation();
     if (!esLider || !liderDocId) return;
@@ -222,42 +240,34 @@ function Catalogo() {
   };
 
   const cantFiltros =
-    (filtros.areasActuales?.length   || 0) +
-    (filtros.areasAnteriores?.length || 0) +
-    (filtros.skills?.length          || 0) +
-    (filtros.idiomas?.length         || 0) +
-    (filtros.nivelEducacion?.length  || 0) +
+    (filtros.areasActuales?.length  || 0) +
+    (filtros.areasAnteriores?.length|| 0) +
+    (filtros.skills?.length         || 0) +
+    (filtros.idiomas?.length        || 0) +
+    (filtros.nivelEducacion?.length || 0) +
+    (filtros.generos?.length        || 0) +
+    (filtros.ubicaciones?.length    || 0) +
     (filtros.soloFavoritos    ? 1 : 0) +
     (filtros.soloConProyectos ? 1 : 0) +
     (filtros.soloConRotaciones? 1 : 0);
 
   if (loading) return (
     <div className="pantalla-carga">
-      <div className="spinner-bcp" />
+      <div className="spinner-bcp"/>
       <p>Cargando talento...</p>
     </div>
   );
 
   return (
     <div className="cat-wrapper">
-      {/* TOPBAR */}
-      <div className="cat-topbar">
-        <div className="cat-topbar-stats">
-          <span className="cat-stat-pill cat-stat-blue">
-            <RiTeamLine size={14} style={{marginRight:4}}/>{perfiles.length} Talentos
-          </span>
-          {esLider && (
-            <span className="cat-stat-pill cat-stat-orange">
-              <FiStar size={13} style={{marginRight:4}}/>{favIds.length} Favoritos
-            </span>
-          )}
-        </div>
 
+      {/* ─── TOPBAR ─── */}
+      <div className="cat-topbar">
         <div className="cat-search-wrap">
           <IoSearchOutline className="cat-search-icon" size={17}/>
           <input
             className="cat-search"
-            placeholder="Buscar por nombre, rol, tags..."
+            placeholder="Buscar por nombre, rol, skills, área..."
             value={filtros.busqueda}
             onChange={(e) => setFiltros({ ...filtros, busqueda: e.target.value })}
           />
@@ -267,19 +277,12 @@ function Catalogo() {
             </button>
           )}
         </div>
-
-        <button
-          className={`cat-btn-filtrar cat-btn-filtrar-mobile ${cantFiltros > 0 ? "cat-btn-filtrar-on" : ""}`}
-          onClick={() => setPanelAbierto((v) => !v)}
-        >
-          <IoFilterOutline size={15} style={{marginRight:5}}/>Filtrar
-          {cantFiltros > 0 && <span className="cat-filtro-badge">{cantFiltros}</span>}
-        </button>
       </div>
 
-      {/* CUERPO: FILTROS | CARDS */}
+      {/* ─── BODY ─── */}
       <div className="cat-body">
 
+        {/* PANEL FILTROS */}
         <Filtros
           filtros={filtros}
           onChange={setFiltros}
@@ -289,12 +292,12 @@ function Catalogo() {
           onCerrar={() => setPanelAbierto(false)}
         />
 
-        {/* ÁREA DE CARDS — scroll solo aquí */}
+        {/* GRID */}
         <div className="cat-grid-area">
           <div className="cat-section-header">
-            <h2 className="cat-section-titulo">Encuentra tu talento</h2>
+            <h2 className="cat-section-titulo">Talento BCP</h2>
             <div className="cat-result-info">
-              <strong>{filtrados.length}</strong> perfiles
+              <strong>{filtrados.length}</strong> perfiles encontrados
               {cantFiltros > 0 && (
                 <button className="cat-limpiar-link" onClick={() => setFiltros(FILTROS_INIT)}>
                   Limpiar filtros
@@ -329,7 +332,7 @@ function Catalogo() {
         </div>
       </div>
 
-      {/* MODAL PERFIL RÁPIDO */}
+      {/* MODAL */}
       {perfilModal && (
         <ModalPerfil
           perfil={perfilModal}
@@ -346,191 +349,97 @@ function Catalogo() {
 }
 
 /* ══════════════════════════════════════════
-   TARJETA CON FLIP (click → 3 s auto-volver)
+   TARJETA PRACTICANTE
 ══════════════════════════════════════════ */
 function TarjetaPracticante({ perfil, esFav, esLider, onToggleFav, onVerPerfil }) {
-  const [flipped, setFlipped] = useState(false);
-  const timerRef = useRef(null);
-
   const ubicacion = [perfil.ciudad, perfil.pais].filter(Boolean).join(", ") || perfil.distrito || null;
   const nivelEdu  = perfil.educacion?.[0]
     ? `${perfil.educacion[0].institucion}${perfil.educacion[0].nivel ? " · " + perfil.educacion[0].nivel : ""}`
     : null;
-  const meses    = calcMesesExp(perfil.experiencia);
-  const rango    = rangoExp(meses);
+  const meses = calcMesesExp(perfil.experiencia);
+  const rango = rangoExp(meses);
   const tecnicas = (perfil.skills || []).slice(0, 4);
-  const blandas  = (perfil.habilidadesBlandas || []).slice(0, 3);
-  const areasAnteriores = (perfil.areasRotacion || [])
+  const blandas  = (perfil.habilidadesBlandas || []).slice(0, 2);
+
+  /* ← campo correcto: rotaciones (no areasRotacion) */
+  const areasAnteriores = (perfil.rotaciones || [])
     .map((r) => r.area)
     .filter((a) => a && a !== perfil.area);
 
-  const handleFlip = () => {
-    clearTimeout(timerRef.current);
-    setFlipped(true);
-    timerRef.current = setTimeout(() => setFlipped(false), 3000);
-  };
-
-  useEffect(() => () => clearTimeout(timerRef.current), []);
+  const compColor =
+    perfil.completitud >= 80 ? "#16a34a" :
+    perfil.completitud >= 60 ? "#d97706" : "#dc2626";
 
   return (
-    <div
-      className={`tc-flip-container ${flipped ? "tc-flipped" : ""}`}
-      onClick={handleFlip}
-    >
-      <div className="tc-flipper">
+    <div className="tc-card" onClick={onVerPerfil}>
+      <div className="tc-comp-bar">
+        <div className="tc-comp-fill" style={{ width:`${perfil.completitud}%`, background:compColor }}/>
+      </div>
 
-        {/* ── CARA FRONTAL ── */}
-        <div className="tc-front tc-card">
-          {esLider && (
-            <button
-              className={`tc-fav ${esFav ? "tc-fav-on" : ""}`}
-              onClick={(e) => { e.stopPropagation(); onToggleFav(e); }}
-              title={esFav ? "Quitar favorito" : "Guardar favorito"}
-            >
-              <FiStar size={15}/>
-            </button>
-          )}
+      {esLider && (
+        <button
+          className={`tc-fav ${esFav ? "tc-fav-on" : ""}`}
+          onClick={(e) => { e.stopPropagation(); onToggleFav(e); }}
+          title={esFav ? "Quitar favorito" : "Guardar favorito"}
+        >
+          <FiStar size={14}/>
+        </button>
+      )}
 
-          <div className="tc-header">
-            <div className="tc-avatar">
-              {perfil.foto
-                ? <img src={perfil.foto} alt={perfil.nombre} />
-                : <span>{perfil.nombre?.charAt(0)?.toUpperCase()}</span>
-              }
-            </div>
-            <div className="tc-info">
-              <h5 className="tc-nombre">{perfil.nombre}</h5>
-              <p className="tc-titulo">{perfil.titulo || "Sin título"}</p>
-              {ubicacion && (
-                <p className="tc-meta">
-                  <FiMapPin size={11} style={{marginRight:3}}/>{ubicacion}
-                </p>
-              )}
-              {nivelEdu && (
-                <p className="tc-meta">
-                  <MdSchool size={12} style={{marginRight:3}}/>{nivelEdu}
-                </p>
-              )}
-              {rango && (
-                <p className="tc-meta tc-exp">
-                  <HiOutlineBriefcase size={12} style={{marginRight:3}}/>{rango} de experiencia
-                </p>
-              )}
-            </div>
-          </div>
-
-          {perfil.area && (
-            <div className="tc-areas">
-              <span className="tc-area-chip tc-area-actual">{perfil.area}</span>
-              {areasAnteriores.slice(0, 1).map((a, i) => (
-                <span key={i} className="tc-area-chip tc-area-anterior" title="Área anterior en BCP">{a}</span>
-              ))}
-              {areasAnteriores.length > 1 && (
-                <span className="tc-area-mas">+{areasAnteriores.length - 1}</span>
-              )}
-            </div>
-          )}
-
-          {tecnicas.length > 0 && (
-            <div className="tc-tags-row">
-              <MdBolt size={12} style={{marginRight:4, color:"#003DA5", flexShrink:0}}/>
-              <div className="tc-tags">
-                {tecnicas.map((s, i) => <span key={i} className="tc-tag tc-tag-tec">{s.trim()}</span>)}
-                {(perfil.skills || []).length > 4 && (
-                  <span className="tc-tag-mas">+{perfil.skills.length - 4}</span>
-                )}
-              </div>
-            </div>
-          )}
-
-          {blandas.length > 0 && (
-            <div className="tc-tags-row" style={{ marginTop: 3 }}>
-              <RiTeamLine size={12} style={{marginRight:4, color:"#5c7d3e", flexShrink:0}}/>
-              <div className="tc-tags">
-                {blandas.map((s, i) => <span key={i} className="tc-tag tc-tag-bla">{s.trim()}</span>)}
-                {(perfil.habilidadesBlandas || []).length > 3 && (
-                  <span className="tc-tag-mas">+{perfil.habilidadesBlandas.length - 3}</span>
-                )}
-              </div>
-            </div>
-          )}
-
-          <p style={{
-            fontSize: 10,
-            color: "#aaa",
-            textAlign: "center",
-            marginTop: "auto",
-            paddingTop: 8,
-            letterSpacing: "0.3px",
-          }}>Toca para ver más →</p>
+      <div className="tc-header">
+        <div className="tc-avatar">
+          {perfil.foto
+            ? <img src={perfil.foto} alt={perfil.nombre}/>
+            : <span>{perfil.nombre?.charAt(0)?.toUpperCase()}</span>
+          }
         </div>
+        <div className="tc-info">
+          <h5 className="tc-nombre">{perfil.nombre}</h5>
+          <p className="tc-titulo">{perfil.titulo || "Sin título"}</p>
+          {ubicacion && <p className="tc-meta"><FiMapPin size={11}/> {ubicacion}</p>}
+          {nivelEdu  && <p className="tc-meta"><MdSchool size={12}/> {nivelEdu}</p>}
+          {rango     && <p className="tc-meta tc-exp"><HiOutlineBriefcase size={12}/> {rango} de exp.</p>}
+        </div>
+      </div>
 
-        {/* ── CARA TRASERA ── */}
-        <div className="tc-back tc-card" style={{display:"flex", flexDirection:"column"}}>
-          {/* Resumen profesional */}
-          {perfil.resumen ? (
-            <p className="tc-back-resumen">
-              "{perfil.resumen.length > 140 ? perfil.resumen.slice(0, 140) + "…" : perfil.resumen}"
-            </p>
-          ) : (
-            <p className="tc-back-resumen tc-back-resumen-empty">Sin resumen profesional</p>
+      {perfil.area && (
+        <div className="tc-areas">
+          <span className="tc-area-chip tc-area-actual">{perfil.area}</span>
+          {areasAnteriores.slice(0, 1).map((a, i) => (
+            <span key={i} className="tc-area-chip tc-area-anterior" title="Área anterior">{a}</span>
+          ))}
+          {areasAnteriores.length > 1 && (
+            <span className="tc-area-mas">+{areasAnteriores.length - 1}</span>
           )}
+        </div>
+      )}
 
-          {/* Idiomas */}
-          {perfil.idiomas?.length > 0 && (
-            <div style={{display:"flex", alignItems:"center", marginBottom:7}}>
-              <MdLanguage size={13} style={{color:"#003DA5", marginRight:5, flexShrink:0}}/>
-              <span style={{fontSize:12, color:"#444"}}>
-                {perfil.idiomas.map((i) => `${i.idioma} (${i.nivel})`).join(" · ")}
-              </span>
-            </div>
-          )}
-
-          {/* Experiencia BCP */}
-          {areasAnteriores.length > 0 && (
-            <div style={{display:"flex", alignItems:"center", marginBottom:7}}>
-              <BsBuilding size={12} style={{color:"#003DA5", marginRight:5, flexShrink:0}}/>
-              <span style={{fontSize:12, color:"#444"}}>Rotó por: {areasAnteriores.join(", ")}</span>
-            </div>
-          )}
-
-          {/* Proyectos */}
-          {perfil.proyectos?.length > 0 && (
-            <div style={{display:"flex", alignItems:"center", marginBottom:7}}>
-              <MdRocketLaunch size={13} style={{color:"#003DA5", marginRight:5, flexShrink:0}}/>
-              <span style={{fontSize:12, color:"#444"}}>{perfil.proyectos.length} proyecto{perfil.proyectos.length > 1 ? "s" : ""} destacado{perfil.proyectos.length > 1 ? "s" : ""}</span>
-            </div>
-          )}
-
-          {/* Completitud */}
-          <div style={{marginTop:"auto", paddingTop:8}}>
-            <div style={{display:"flex", justifyContent:"space-between", marginBottom:4}}>
-              <span style={{fontSize:10, color:"#888"}}>Perfil completado</span>
-              <span style={{fontSize:10, fontWeight:700, color:"#003DA5"}}>{perfil.completitud}%</span>
-            </div>
-            <div style={{height:4, background:"#e8eef8", borderRadius:4, overflow:"hidden"}}>
-              <div style={{height:"100%", width:`${perfil.completitud}%`, background:"#003DA5", borderRadius:4}}/>
-            </div>
-          </div>
-
-          <div className="tc-back-actions">
-            <button
-              className="tc-btn-ver"
-              onClick={(e) => { e.stopPropagation(); onVerPerfil(); }}
-            >
-              <FiExternalLink size={13} style={{marginRight:5}}/>Ver perfil rápido
-            </button>
-            {esLider && (
-              <button
-                className={`tc-btn-fav-back ${esFav ? "tc-btn-fav-back-on" : ""}`}
-                onClick={(e) => { e.stopPropagation(); onToggleFav(e); }}
-              >
-                <FiStar size={14}/> {esFav ? "Guardado" : "Guardar"}
-              </button>
+      {tecnicas.length > 0 && (
+        <div className="tc-tags-row">
+          <MdBolt size={12} className="tc-tags-icon"/>
+          <div className="tc-tags">
+            {tecnicas.map((s, i) => <span key={i} className="tc-tag tc-tag-tec">{s.trim()}</span>)}
+            {(perfil.skills || []).length > 4 && (
+              <span className="tc-tag-mas">+{perfil.skills.length - 4}</span>
             )}
           </div>
         </div>
+      )}
 
+      {blandas.length > 0 && (
+        <div className="tc-tags-row">
+          <RiTeamLine size={12} className="tc-tags-icon" style={{color:"#5c7d3e"}}/>
+          <div className="tc-tags">
+            {blandas.map((s, i) => <span key={i} className="tc-tag tc-tag-bla">{s.trim()}</span>)}
+          </div>
+        </div>
+      )}
+
+      <div className="tc-footer">
+        <span className="tc-comp-label" style={{ color: compColor }}>
+          {perfil.completitud}% completado
+        </span>
+        <span className="tc-ver-link">Ver perfil →</span>
       </div>
     </div>
   );
@@ -549,29 +458,28 @@ function ModalPerfil({ perfil, cargando, esFav, esLider, onToggleFav, onCerrar, 
   const meses     = calcMesesExp(perfil.experiencia);
   const rango     = rangoExp(meses);
 
-  const areasAnteriores = (perfil.areasRotacion || [])
-    .filter((r) => r.area && r.area !== perfil.area);
+  /* ← campo correcto: rotaciones */
+  const areasAnteriores = (perfil.rotaciones || []).filter(
+    (r) => r.area && r.area !== perfil.area
+  );
 
   return (
     <div className="mp-overlay" onClick={onCerrar}>
       <div className="mp-caja" onClick={(e) => e.stopPropagation()}>
 
-        {/* Botón cerrar */}
-        <button className="mp-close-btn" onClick={onCerrar}>
-          <FiX size={18}/>
-        </button>
+        <button className="mp-close-btn" onClick={onCerrar}><FiX size={18}/></button>
 
         {cargando ? (
-          <div className="mp-loading"><div className="spinner-bcp" /></div>
+          <div className="mp-loading"><div className="spinner-bcp"/></div>
         ) : (
           <>
             {/* HEADER */}
             <div className="mp-header">
-              <div className="mp-banner" />
+              <div className="mp-banner"/>
               <div className="mp-avatar-wrap">
                 <div className="mp-avatar">
                   {perfil.foto
-                    ? <img src={perfil.foto} alt={perfil.nombre} />
+                    ? <img src={perfil.foto} alt={perfil.nombre}/>
                     : <span>{perfil.nombre?.charAt(0)?.toUpperCase()}</span>
                   }
                 </div>
@@ -580,29 +488,20 @@ function ModalPerfil({ perfil, cargando, esFav, esLider, onToggleFav, onCerrar, 
                 <div className="mp-nombre-row">
                   <h3 className="mp-nombre">{perfil.nombre} {perfil.apellidos}</h3>
                   {esLider && (
-                    <button className={`mp-fav-btn ${esFav ? "mp-fav-on" : ""}`} onClick={onToggleFav}>
-                      <FiStar size={13} style={{marginRight:4}}/>{esFav ? "Guardado" : "Guardar"}
+                    <button
+                      className={`mp-fav-btn ${esFav ? "mp-fav-on" : ""}`}
+                      onClick={onToggleFav}
+                    >
+                      <FiStar size={13} style={{marginRight:4}}/>
+                      {esFav ? "Guardado" : "Guardar"}
                     </button>
                   )}
                 </div>
                 <p className="mp-titulo">{perfil.titulo || "Sin título"}</p>
-
-                {ubicacion && (
-                  <p className="mp-ubic">
-                    <FiMapPin size={12} style={{marginRight:4}}/>{ubicacion}
-                  </p>
-                )}
-                {rango && (
-                  <p className="mp-rango-exp">
-                    <HiOutlineBriefcase size={13} style={{marginRight:4}}/>{rango} de experiencia total
-                  </p>
-                )}
-
-                {/* Área actual */}
+                {ubicacion && <p className="mp-ubic"><FiMapPin size={12} style={{marginRight:4}}/>{ubicacion}</p>}
+                {rango     && <p className="mp-rango-exp"><HiOutlineBriefcase size={13} style={{marginRight:4}}/>{rango} de experiencia total</p>}
                 <div className="mp-areas">
-                  {perfil.area && (
-                    <span className="tc-area-chip tc-area-actual">{perfil.area}</span>
-                  )}
+                  {perfil.area && <span className="tc-area-chip tc-area-actual">{perfil.area}</span>}
                   {areasAnteriores.map((r, i) => (
                     <span
                       key={i}
@@ -616,51 +515,53 @@ function ModalPerfil({ perfil, cargando, esFav, esLider, onToggleFav, onCerrar, 
               </div>
             </div>
 
-            {/* BODY 2 COLS */}
+            {/* BODY */}
             <div className="mp-body">
+
               {/* COL IZQUIERDA */}
               <div className="mp-col-izq">
-                <MpSeccion titulo="Datos personales" Icono={null}>
-                  {ubicacion        && <MpDato Icon={FiMapPin}             val={ubicacion} />}
-                  {perfil.telefono  && <MpDato Icon={()=><FiPhone size={13}/>}  val={perfil.telefono} />}
-                  {perfil.email     && <MpDato Icon={()=><FiMail size={13}/>}   val={perfil.email} />}
-                  {perfil.linkedin  && (
+                <MpSeccion titulo="Contacto">
+                  {ubicacion       && <MpDato Icon={FiMapPin}  val={ubicacion}/>}
+                  {perfil.telefono && <MpDato Icon={FiPhone}    val={perfil.telefono}/>}
+                  {perfil.email    && <MpDato Icon={FiMail}     val={perfil.email}/>}
+                  {perfil.linkedin && (
                     <a href={perfil.linkedin} target="_blank" rel="noopener noreferrer" className="mp-link">
-                      <FiLinkedin size={13}/> LinkedIn
+                      <FaLinkedin size={13}/> LinkedIn
                     </a>
                   )}
-                  {perfil.github    && (
+                  {perfil.github && (
                     <a href={perfil.github} target="_blank" rel="noopener noreferrer" className="mp-link">
-                      <FiGithub size={13}/> GitHub
+                      <FaGithub size={13}/> GitHub
                     </a>
                   )}
                 </MpSeccion>
 
-                {/* Historial de áreas en BCP */}
+                {/* HISTORIAL BCP ← campo correcto */}
                 {areasAnteriores.length > 0 && (
-                  <MpSeccion titulo="Historial en BCP" Icono={HiOutlineOfficeBuilding}>
+                  <MpSeccion titulo="Historial BCP">
                     {areasAnteriores.map((r, i) => (
                       <div key={i} className="mp-item">
-                        <p className="mp-item-t" style={{ color:"#003DA5" }}>{r.area}</p>
+                        <p className="mp-item-t" style={{color:"#003DA5"}}>{r.area}</p>
                         <p className="mp-item-d">
-                          {r.desdeM} {r.desdeA} – {r.actualmente ? "Actualidad" : `${r.hastaM} ${r.hastaA}`}
+                          {r.desdeM} {r.desdeA} — {r.actualmente ? "Actualidad" : `${r.hastaM} ${r.hastaA}`}
                         </p>
+                        {r.logros && <p className="mp-item-desc">{r.logros}</p>}
                       </div>
                     ))}
                   </MpSeccion>
                 )}
 
                 {perfil.educacion?.length > 0 && (
-                  <MpSeccion titulo="Formación Académica" Icono={MdSchool}>
+                  <MpSeccion titulo="Formación">
                     {perfil.educacion.map((e, i) => (
                       <div key={i} className="mp-item">
                         <p className="mp-item-t">{e.institucion}</p>
-                        {e.carrera && <p className="mp-item-s">Carrera: {e.carrera}</p>}
+                        {e.carrera && <p className="mp-item-s">{e.carrera}</p>}
                         {e.nivel   && <span className="mp-edu-nivel">{e.nivel}</span>}
                         <p className="mp-item-d">
                           {e.actualmente
                             ? `${e.desdeM} ${e.desdeA} — Actualidad`
-                            : `${e.desdeM || ""} ${e.desdeA || ""}${e.hastaA ? ` — ${e.hastaM} ${e.hastaA}` : ""}`}
+                            : `${e.desdeM||""} ${e.desdeA||""}${e.hastaA ? ` — ${e.hastaM} ${e.hastaA}` : ""}`}
                         </p>
                       </div>
                     ))}
@@ -668,22 +569,21 @@ function ModalPerfil({ perfil, cargando, esFav, esLider, onToggleFav, onCerrar, 
                 )}
 
                 {perfil.idiomas?.length > 0 && (
-                  <MpSeccion titulo="Idiomas" Icono={MdLanguage}>
+                  <MpSeccion titulo="Idiomas">
                     {perfil.idiomas.map((id, i) => (
-                      <p key={i} className="mp-idioma"><strong>{id.idioma}:</strong> {id.nivel}</p>
+                      <p key={i} className="mp-idioma">
+                        <strong>{id.idioma}:</strong> {id.nivel}
+                      </p>
                     ))}
                   </MpSeccion>
                 )}
 
                 {perfil.movilidad && (
-                  <MpSeccion titulo="Disponibilidad" Icono={null}>
-                    {perfil.jornadaDisponible && (
-                      <p className="mp-dato">{perfil.jornadaDisponible}</p>
-                    )}
+                  <MpSeccion titulo="Disponibilidad">
                     <div className="mp-movilidad">
-                      <span className={`mp-mov ${perfil.movilidad.viajar ? "mp-mov-si":"mp-mov-no"}`}>{perfil.movilidad.viajar ? "✓":"✗"} Viajar</span>
-                      <span className={`mp-mov ${perfil.movilidad.reubicacion ? "mp-mov-si":"mp-mov-no"}`}>{perfil.movilidad.reubicacion ? "✓":"✗"} Reubicación</span>
-                      <span className={`mp-mov ${perfil.movilidad.vehiculo ? "mp-mov-si":"mp-mov-no"}`}>{perfil.movilidad.vehiculo ? "✓":"✗"} Vehículo</span>
+                      <span className={`mp-mov ${perfil.movilidad.viajar ? "mp-mov-si":"mp-mov-no"}`}>{perfil.movilidad.viajar?"✓":"✗"} Viajar</span>
+                      <span className={`mp-mov ${perfil.movilidad.reubicacion ? "mp-mov-si":"mp-mov-no"}`}>{perfil.movilidad.reubicacion?"✓":"✗"} Reubicación</span>
+                      <span className={`mp-mov ${perfil.movilidad.vehiculo ? "mp-mov-si":"mp-mov-no"}`}>{perfil.movilidad.vehiculo?"✓":"✗"} Vehículo</span>
                     </div>
                   </MpSeccion>
                 )}
@@ -692,14 +592,16 @@ function ModalPerfil({ perfil, cargando, esFav, esLider, onToggleFav, onCerrar, 
               {/* COL DERECHA */}
               <div className="mp-col-der">
                 {perfil.resumen && (
-                  <MpSeccion titulo="Perfil Profesional" Icono={null}>
+                  <MpSeccion titulo="Perfil Profesional">
                     <p className="mp-resumen">{perfil.resumen}</p>
-                    {perfil.intereses && <p className="mp-intereses"><strong>Intereses:</strong> {perfil.intereses}</p>}
+                    {perfil.intereses && (
+                      <p className="mp-intereses"><strong>Intereses:</strong> {perfil.intereses}</p>
+                    )}
                   </MpSeccion>
                 )}
 
                 {perfil.experiencia?.length > 0 && (
-                  <MpSeccion titulo="Experiencia / Prácticas" Icono={HiOutlineBriefcase}>
+                  <MpSeccion titulo="Experiencia">
                     {perfil.experiencia.map((exp, i) => (
                       <div key={i} className="mp-item">
                         <p className="mp-item-t">{exp.cargo}</p>
@@ -716,10 +618,10 @@ function ModalPerfil({ perfil, cargando, esFav, esLider, onToggleFav, onCerrar, 
                 )}
 
                 {(perfil.skills?.length > 0 || perfil.habilidadesBlandas?.length > 0) && (
-                  <MpSeccion titulo="Habilidades y Competencias" Icono={MdBolt}>
+                  <MpSeccion titulo="Habilidades">
                     {perfil.skills?.length > 0 && (
                       <>
-                        <p className="mp-skills-cat mp-skills-tec">Técnicas:</p>
+                        <p className="mp-skills-cat mp-skills-tec">Técnicas</p>
                         <div className="mp-tags">
                           {perfil.skills.map((s, i) => <span key={i} className="mp-tag mp-tag-tec">{s.trim()}</span>)}
                         </div>
@@ -727,7 +629,7 @@ function ModalPerfil({ perfil, cargando, esFav, esLider, onToggleFav, onCerrar, 
                     )}
                     {perfil.habilidadesBlandas?.length > 0 && (
                       <>
-                        <p className="mp-skills-cat mp-skills-bla" style={{ marginTop:8 }}>Blandas:</p>
+                        <p className="mp-skills-cat mp-skills-bla" style={{marginTop:8}}>Blandas</p>
                         <div className="mp-tags">
                           {perfil.habilidadesBlandas.map((s, i) => <span key={i} className="mp-tag mp-tag-bla">{s.trim()}</span>)}
                         </div>
@@ -737,7 +639,7 @@ function ModalPerfil({ perfil, cargando, esFav, esLider, onToggleFav, onCerrar, 
                 )}
 
                 {perfil.proyectos?.length > 0 && (
-                  <MpSeccion titulo="Proyectos destacados" Icono={MdRocketLaunch}>
+                  <MpSeccion titulo="Proyectos">
                     {perfil.proyectos.map((pr, i) => (
                       <div key={i} className="mp-item">
                         <p className="mp-item-t">{pr.nombre}</p>
@@ -754,7 +656,7 @@ function ModalPerfil({ perfil, cargando, esFav, esLider, onToggleFav, onCerrar, 
                 )}
 
                 {perfil.cursos?.length > 0 && (
-                  <MpSeccion titulo="Logros y Participaciones" Icono={TbCertificate}>
+                  <MpSeccion titulo="Logros y Certificaciones">
                     {perfil.cursos.map((c, i) => (
                       <div key={i} className="mp-curso">
                         {c.tipo === "Certificado" ? <BsTrophy size={14}/> : <MdMenuBook size={14}/>}
@@ -777,7 +679,7 @@ function ModalPerfil({ perfil, cargando, esFav, esLider, onToggleFav, onCerrar, 
             {/* FOOTER */}
             <div className="mp-footer">
               <button className="mp-btn-volver-footer" onClick={onCerrar}>
-                <FiArrowLeft size={14} style={{marginRight:5}}/>Volver al catálogo
+                <FiArrowLeft size={14} style={{marginRight:5}}/>Volver
               </button>
               {esLider && perfil.email && (
                 <a href={`mailto:${perfil.email}?subject=Oportunidad BCP`} className="mp-btn-contactar">
@@ -795,13 +697,10 @@ function ModalPerfil({ perfil, cargando, esFav, esLider, onToggleFav, onCerrar, 
   );
 }
 
-/* helpers */
-function MpSeccion({ titulo, Icono, children }) {
+function MpSeccion({ titulo, children }) {
   return (
     <div className="mp-seccion">
-      <h6 className="mp-seccion-t">
-        {Icono && <Icono size={13} style={{marginRight:5}}/>}{titulo}
-      </h6>
+      <h6 className="mp-seccion-t">{titulo}</h6>
       {children}
     </div>
   );
@@ -814,5 +713,6 @@ function MpDato({ Icon, val }) {
     </p>
   );
 }
+
 
 export default Catalogo;
