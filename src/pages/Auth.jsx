@@ -144,14 +144,14 @@ function Auth() {
               <FiUser size={16} className="auth-left-card-icon"/>
               <div>
                 <strong>Practicantes</strong>
-                <p>Regístrate con cualquier correo o inicia sesión con tus credenciales.</p>
+                <p>Regístrate o inicia sesión con tus credenciales.</p>
               </div>
             </div>
             <div className="auth-left-card">
               <HiOutlineOfficeBuilding size={16} className="auth-left-card-icon"/>
               <div>
                 <strong>Líderes BCP</strong>
-                <p>Inicia sesión con tu correo y la contraseña asignada por TI. El sistema te redirigirá automáticamente.</p>
+                <p>Inicia sesión con tu correo y la contraseña asignadas. El sistema te redirigirá automáticamente.</p>
               </div>
             </div>
           </div>
@@ -240,8 +240,6 @@ function Auth() {
               ? "Cargando..."
               : modo === "registro"
               ? "Crear cuenta"
-              : esLider
-              ? "Ingresar al Dashboard"
               : "Ingresar"}
           </button>
 
