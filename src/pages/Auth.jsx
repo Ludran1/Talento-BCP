@@ -122,25 +122,6 @@ function Auth() {
     } finally { setCargando(false); }
   };
 
-  /* ── GOOGLE — detecta automáticamente el tipo de usuario ── */
-  const handleGoogle = async () => {
-    setError("");
-    setCargando(true);
-    try {
-      const result = await signInWithPopup(auth, provider);
-      const user   = result.user;
-      const esL    = !!user.email?.endsWith("@bcp.com");
-      if (esL) {
-        await asegurarDocLider(user);
-        navigate("/dashboard-lider");
-      } else {
-        await asegurarDocPracticante(user, "");
-        navigate("/perfil");
-      }
-    } catch {
-      setError("Error al iniciar sesión con Google.");
-    } finally { setCargando(false); }
-  };
 
   const handleSubmit = () => (modo === "registro" ? handleRegistro() : handleLogin());
 
@@ -170,7 +151,7 @@ function Auth() {
               <HiOutlineOfficeBuilding size={16} className="auth-left-card-icon"/>
               <div>
                 <strong>Líderes BCP</strong>
-                <p>Inicia sesión con tu correo <code>@bcp.com</code> y la contraseña asignada por TI. El sistema te redirigirá automáticamente.</p>
+                <p>Inicia sesión con tu correo y la contraseña asignada por TI. El sistema te redirigirá automáticamente.</p>
               </div>
             </div>
           </div>
@@ -201,16 +182,6 @@ function Auth() {
             </button>
           </div>
 
-          {/* INDICADOR de tipo detectado */}
-          {email.trim() && (
-            <div className={`auth-tipo-badge ${esLider ? "auth-tipo-lider" : "auth-tipo-practicante"}`}>
-              {esLider
-                ? <><HiOutlineOfficeBuilding size={13}/> Detectado como <strong>Líder BCP</strong></>
-                : <><FiUser size={13}/> Detectado como <strong>Practicante</strong></>
-              }
-            </div>
-          )}
-
           {/* ERROR */}
           {error && (
             <div className="auth-error">
@@ -235,7 +206,7 @@ function Auth() {
             <FiMail className="auth-field-icon" size={15}/>
             <input
               type="email"
-              placeholder={modo === "login" ? "Correo (practicante o @bcp.com líder)" : "Correo electrónico"}
+              placeholder={modo === "login" ? "Correo electrónico" : "Correo electrónico"}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
@@ -274,11 +245,6 @@ function Auth() {
               : "Ingresar"}
           </button>
 
-          <div className="auth-separator"><span>o continúa con</span></div>
-
-          <button className="auth-btn-google" onClick={handleGoogle} disabled={cargando}>
-            <FcGoogle size={18}/> Continuar con Google
-          </button>
         </div>
       </div>
     </div>
