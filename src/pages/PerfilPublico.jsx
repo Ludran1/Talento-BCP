@@ -4,7 +4,7 @@ import { db, auth } from "../firebase/firebase";
 import { doc, getDoc, updateDoc, arrayUnion, arrayRemove } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, query, where, getDocs } from "firebase/firestore";
-import Navbar from "../components/Navbar.jsx";
+import Navbar from "./Navbar.jsx";
 import "../stylesheets/Perfil.css";
 
 import {

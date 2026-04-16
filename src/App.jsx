@@ -8,7 +8,7 @@ import PerfilPublico from "./pages/PerfilPublico";
 import DashboardLider from "./pages/DashboardLider";
 
 // import Topbar from "./components/Topbar";
-import Navbar from "./components/Navbar";
+import Navbar from "./pages/Navbar";
 
 function Layout() {
   const location = useLocation();

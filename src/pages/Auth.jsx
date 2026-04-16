@@ -15,25 +15,32 @@ import { FcGoogle } from "react-icons/fc";
 import { HiOutlineOfficeBuilding } from "react-icons/hi";
 
 /*
-  DETECCIÓN AUTOMÁTICA LÍDER / PRACTICANTE
-  ─────────────────────────────────────────
-  · correo @bcp.com  → Líder    → redirige a /dashboard-lider
-  · cualquier otro   → Practicante → redirige a /perfil
+  LÓGICA DE ROLES
+  ──────────────────────────────────────────────────────
+  El rol NO se detecta por el correo (ambos tipos de
+  usuario pueden tener correo institucional BCP).
 
-  Líderes NO se auto-registran: usan credenciales asignadas por TI.
-  El modo "Registro" solo aplica para practicantes.
+  En su lugar el usuario elige explícitamente:
+    · Practicante  → se busca / crea en colección "practicantes"
+    · Líder BCP    → se busca / crea en colección "lideres"
+
+  En login se verifica que el usuario exista en la
+  colección correcta para evitar acceso cruzado.
+  ──────────────────────────────────────────────────────
 */
+
 function Auth() {
   const navigate = useNavigate();
 
-  const [modo,     setModo]     = useState("login");   // "login" | "registro"
+  // "login-prac" | "registro-prac" | "login-lider"
+  const [modo,     setModo]     = useState("login-prac");
   const [nombre,   setNombre]   = useState("");
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
   const [error,    setError]    = useState("");
   const [cargando, setCargando] = useState(false);
 
-  const esLider = email.trim().toLowerCase().endsWith("@bcp.com");
+  const esLider = modo === "login-lider";
 
   const reset = (nuevoModo) => {
     setModo(nuevoModo);
@@ -43,9 +50,11 @@ function Auth() {
     setPassword("");
   };
 
-  /* ── Garantizar documento en colección "lideres" ── */
-  const asegurarDocLider = async (u) => {
-    const snap = await getDocs(query(collection(db, "lideres"), where("uid", "==", u.uid)));
+  /* ── Garantizar doc en "lideres" ── */
+  const asegurarLider = async (u) => {
+    const snap = await getDocs(
+      query(collection(db, "lideres"), where("uid", "==", u.uid))
+    );
     if (snap.empty) {
       await addDoc(collection(db, "lideres"), {
         uid:       u.uid,
@@ -58,9 +67,11 @@ function Auth() {
     }
   };
 
-  /* ── Garantizar documento en colección "practicantes" ── */
-  const asegurarDocPracticante = async (u, nombreOverride) => {
-    const snap = await getDocs(query(collection(db, "practicantes"), where("uid", "==", u.uid)));
+  /* ── Garantizar doc en "practicantes" ── */
+  const asegurarPracticante = async (u, nombreOverride = "") => {
+    const snap = await getDocs(
+      query(collection(db, "practicantes"), where("uid", "==", u.uid))
+    );
     if (snap.empty) {
       await addDoc(collection(db, "practicantes"), {
         uid:            u.uid,
@@ -71,55 +82,109 @@ function Auth() {
         skills:         [],
         area:           "",
         experiencia:    [],
+        rotaciones:     [],
       });
     }
   };
 
-  /* ── REGISTRO (solo practicantes) ── */
+  /* ── Verificar que el uid exista en la colección esperada ── */
+  const existeEn = async (coleccion, uid) => {
+    const snap = await getDocs(
+      query(collection(db, coleccion), where("uid", "==", uid))
+    );
+    return !snap.empty;
+  };
+
+  /* ── REGISTRO practicante ── */
   const handleRegistro = async () => {
     setError("");
-    if (!nombre.trim())    { setError("Ingresa tu nombre completo."); return; }
-    if (!email.trim())     { setError("Ingresa tu correo."); return; }
-    if (password.length < 6) { setError("La contraseña debe tener al menos 6 caracteres."); return; }
+    if (!nombre.trim())       { setError("Ingresa tu nombre completo.");                        return; }
+    if (!email.trim())        { setError("Ingresa tu correo.");                                 return; }
+    if (password.length < 6)  { setError("La contraseña debe tener al menos 6 caracteres."); return; }
     setCargando(true);
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, password);
-      await asegurarDocPracticante(cred.user, nombre.trim());
+      await asegurarPracticante(cred.user, nombre.trim());
       navigate("/perfil");
     } catch (e) {
       setError(
         e.code === "auth/email-already-in-use"
-          ? "Este correo ya está registrado. Prueba iniciar sesión."
+          ? "Este correo ya está registrado. Usa Iniciar sesión."
           : "Error al registrarse. Verifica los datos."
       );
     } finally { setCargando(false); }
   };
 
-  /* ── LOGIN — detecta automáticamente el tipo de usuario ── */
+  /* ── LOGIN ── */
   const handleLogin = async () => {
     setError("");
     if (!email.trim() || !password) { setError("Completa todos los campos."); return; }
     setCargando(true);
     try {
-      const result = await signInWithEmailAndPassword(auth, email, password);
+      const result = await signInWithEmailAndPassword(auth, email.trim(), password);
+      const uid    = result.user.uid;
+
       if (esLider) {
-        await asegurarDocLider(result.user);
+        /* verificar que sea líder registrado */
+        const enLideres = await existeEn("lideres", uid);
+        if (!enLideres) {
+          /* podría ser su primer login como líder → creamos el doc */
+          await asegurarLider(result.user);
+        }
         navigate("/dashboard-lider");
       } else {
-        await asegurarDocPracticante(result.user, "");
+        /* verificar que sea practicante */
+        const enLideres = await existeEn("lideres", uid);
+        if (enLideres) {
+          setError("Este usuario es un líder BCP. Selecciona la pestaña 'Líder BCP'.");
+          await auth.signOut();
+          return;
+        }
+        await asegurarPracticante(result.user);
         navigate("/perfil");
       }
     } catch (e) {
-      setError(
-        e.code === "auth/user-not-found"
-          ? "No existe una cuenta con este correo."
-          : "Credenciales incorrectas."
-      );
+      if (e.code === "auth/user-not-found" || e.code === "auth/wrong-password" || e.code === "auth/invalid-credential") {
+        setError("Correo o contraseña incorrectos.");
+      } else if (!e.code) {
+        // error propio (líder en modo practicante)
+        setError(e.message || "Error al iniciar sesión.");
+      } else {
+        setError("Error al iniciar sesión. Intenta de nuevo.");
+      }
     } finally { setCargando(false); }
   };
 
+  /* ── GOOGLE ── */
+  const handleGoogle = async () => {
+    setError("");
+    setCargando(true);
+    try {
+      const result = await signInWithPopup(auth, provider);
+      const user   = result.user;
 
-  const handleSubmit = () => (modo === "registro" ? handleRegistro() : handleLogin());
+      if (esLider) {
+        await asegurarLider(user);
+        navigate("/dashboard-lider");
+      } else {
+        /* si ya es líder, no permitir acceso como practicante */
+        const enLideres = await existeEn("lideres", user.uid);
+        if (enLideres) {
+          setError("Este usuario es un líder BCP. Selecciona la pestaña 'Líder BCP'.");
+          await auth.signOut();
+          return;
+        }
+        await asegurarPracticante(user);
+        navigate("/perfil");
+      }
+    } catch (e) {
+      if (!e.code) setError(e.message || "Error al iniciar sesión.");
+      else setError("Error al iniciar sesión con Google.");
+    } finally { setCargando(false); }
+  };
+
+  const handleSubmit = () =>
+    modo === "registro-prac" ? handleRegistro() : handleLogin();
 
   return (
     <div className="auth-container">
@@ -130,9 +195,11 @@ function Auth() {
           <div className="auth-left-logo">B</div>
           <h2>Talento BCP</h2>
           <p>
-            {modo === "registro"
+            {esLider
+              ? "Accede al panel de líderes para gestionar y descubrir el mejor talento interno."
+              : modo === "registro-prac"
               ? "Crea tu perfil como practicante y hazte visible para los líderes del banco."
-              : "Accede a la plataforma de gestión de talento interno del BCP."}
+              : "Accede a tu perfil, actualiza tu información y conecta con oportunidades internas."}
           </p>
 
           <div className="auth-left-cards">
@@ -140,14 +207,14 @@ function Auth() {
               <FiUser size={16} className="auth-left-card-icon"/>
               <div>
                 <strong>Practicantes</strong>
-                <p>Regístrate o inicia sesión con tus credenciales.</p>
+                <p>Usa la pestaña <em>Practicante</em> para registrarte o iniciar sesión con tu correo.</p>
               </div>
             </div>
             <div className="auth-left-card">
               <HiOutlineOfficeBuilding size={16} className="auth-left-card-icon"/>
               <div>
                 <strong>Líderes BCP</strong>
-                <p>Inicia sesión con tu correo y la contraseña asignadas. El sistema te redirigirá automáticamente.</p>
+                <p>Usa la pestaña <em>Líder BCP</em>. Las cuentas son creadas por el equipo de TI.</p>
               </div>
             </div>
           </div>
@@ -162,21 +229,45 @@ function Auth() {
 
         <div className="auth-box">
 
-          {/* TABS */}
-          <div className="auth-tabs">
+          {/* SELECTOR DE ROL */}
+          <div className="auth-role-selector">
             <button
-              className={`auth-tab ${modo === "login" ? "auth-tab-activo" : ""}`}
-              onClick={() => reset("login")}
+              className={`auth-role-btn ${!esLider ? "auth-role-activo" : ""}`}
+              onClick={() => reset("login-prac")}
             >
-              Iniciar Sesión
+              <FiUser size={15}/> Practicante
             </button>
             <button
-              className={`auth-tab ${modo === "registro" ? "auth-tab-activo" : ""}`}
-              onClick={() => reset("registro")}
+              className={`auth-role-btn ${esLider ? "auth-role-activo" : ""}`}
+              onClick={() => reset("login-lider")}
             >
-              Registrarse
+              <HiOutlineOfficeBuilding size={15}/> Líder BCP
             </button>
           </div>
+
+          {/* TABS login / registro (solo practicante) */}
+          {!esLider && (
+            <div className="auth-tabs">
+              <button
+                className={`auth-tab ${modo === "login-prac" ? "auth-tab-activo" : ""}`}
+                onClick={() => reset("login-prac")}
+              >
+                Iniciar sesión
+              </button>
+              <button
+                className={`auth-tab ${modo === "registro-prac" ? "auth-tab-activo" : ""}`}
+                onClick={() => reset("registro-prac")}
+              >
+                Registrarse
+              </button>
+            </div>
+          )}
+
+          {esLider && (
+            <p className="auth-lider-nota">
+              <FiInfo size={13}/> Inicia sesión con las credenciales asignadas por TI.
+            </p>
+          )}
 
           {/* ERROR */}
           {error && (
@@ -186,7 +277,7 @@ function Auth() {
           )}
 
           {/* NOMBRE — solo registro */}
-          {modo === "registro" && (
+          {modo === "registro-prac" && (
             <div className="auth-field">
               <FiUser className="auth-field-icon" size={15}/>
               <input
@@ -202,7 +293,7 @@ function Auth() {
             <FiMail className="auth-field-icon" size={15}/>
             <input
               type="email"
-              placeholder={modo === "login" ? "Correo electrónico" : "Correo electrónico"}
+              placeholder="Correo electrónico"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
@@ -227,11 +318,18 @@ function Auth() {
           >
             {cargando
               ? "Cargando..."
-              : modo === "registro"
+              : modo === "registro-prac"
               ? "Crear cuenta"
+              : esLider
+              ? "Ingresar al Dashboard"
               : "Ingresar"}
           </button>
 
+          <div className="auth-separator"><span>o continúa con</span></div>
+
+          <button className="auth-btn-google" onClick={handleGoogle} disabled={cargando}>
+            <FcGoogle size={18}/> Continuar con Google
+          </button>
         </div>
       </div>
     </div>

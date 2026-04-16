@@ -8,6 +8,7 @@ import {
 import { onAuthStateChanged } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 import Filtros from "./Filtros.jsx";
+import Navbar from "./Navbar.jsx";
 import "../stylesheets/Catalogo.css";
 
 import {
@@ -69,16 +70,17 @@ const rangoExp = (m) => {
    IMPORTANTE: usa "rotaciones" (campo real en Firestore),
    NO "areasRotacion" (nombre incorrecto anterior).           */
 const FILTROS_INIT = {
-  busqueda:         "",
-  areas:            [],   // busca en área actual Y en rotaciones anteriores
+  busqueda: "",
+  areasActuales:    [],   // filtra por p.area
+  areasAnteriores:  [],   // filtra por p.rotaciones[].area
   skills:           [],
   idiomas:          [],
   nivelEducacion:   [],
   generos:          [],
-  ubicaciones:      [],
-  rangosExp:        [],
+  ubicaciones:      [],   // filtra por ciudad o distrito
   soloFavoritos:    false,
   soloConProyectos: false,
+  soloConRotaciones:false,
 };
 
 /* ══════════════════════════════════════════
@@ -97,19 +99,19 @@ function Catalogo() {
   const [liderDocId,   setLiderDocId]   = useState(null);
   const [favIds,       setFavIds]       = useState([]);
 
-  /* auth */
+  /* auth — esLider se determina buscando uid en colección "lideres",
+     NO por dominio del correo (practicantes también pueden tener @bcp.com) */
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) return;
-      const esL = !!u.email?.endsWith("@bcp.com");
-      setEsLider(esL);
-      if (esL) {
-        const snap = await getDocs(query(collection(db, "lideres"), where("uid", "==", u.uid)));
-        if (!snap.empty) {
-          const d = snap.docs[0];
-          setLiderDocId(d.id);
-          setFavIds(d.data().favoritos || []);
-        }
+      const snap = await getDocs(query(collection(db, "lideres"), where("uid", "==", u.uid)));
+      if (!snap.empty) {
+        setEsLider(true);
+        const d = snap.docs[0];
+        setLiderDocId(d.id);
+        setFavIds(d.data().favoritos || []);
+      } else {
+        setEsLider(false);
       }
     });
     return () => unsub();
@@ -158,25 +160,29 @@ function Catalogo() {
           if (!hay.includes(txt)) return false;
         }
 
-        /* áreas de experiencia — busca en área actual Y en rotaciones anteriores */
-        if (filtros.areas?.length > 0) {
-          const areaActual  = p.area || "";
-          const areasRotac  = (p.rotaciones || []).map((r) => r.area);
-          const todasAreas  = [areaActual, ...areasRotac].filter(Boolean);
-          if (!filtros.areas.some((a) => todasAreas.includes(a))) return false;
+        /* área ACTUAL */
+        if (filtros.areasActuales.length > 0 && !filtros.areasActuales.includes(p.area))
+          return false;
+
+        /* área ANTERIOR ← campo correcto */
+        if (filtros.areasAnteriores.length > 0) {
+          const areasRot = (p.rotaciones || []).map((r) => r.area);
+          if (!filtros.areasAnteriores.some((a) => areasRot.includes(a))) return false;
         }
 
-        /* skills — comparación case-insensitive para tolerar variantes de escritura */
+        /* solo con historial BCP ← campo correcto */
+        if (filtros.soloConRotaciones && !(p.rotaciones?.length > 0)) return false;
+
+        /* skills */
         if (filtros.skills.length > 0) {
-          const sp = [...(p.skills || []), ...(p.habilidadesBlandas || [])]
-            .map((s) => s.trim().toLowerCase());
-          if (!filtros.skills.some((s) => sp.includes(s.toLowerCase()))) return false;
+          const sp = [...(p.skills || []), ...(p.habilidadesBlandas || [])].map((s) => s.trim());
+          if (!filtros.skills.some((s) => sp.includes(s))) return false;
         }
 
         /* idiomas */
         if (filtros.idiomas.length > 0) {
-          const ip = (p.idiomas || []).map((i) => (i.idioma || i).toLowerCase());
-          if (!filtros.idiomas.some((i) => ip.includes(i.toLowerCase()))) return false;
+          const ip = (p.idiomas || []).map((i) => i.idioma || i);
+          if (!filtros.idiomas.some((i) => ip.includes(i))) return false;
         }
 
         /* nivel educación */
@@ -194,13 +200,6 @@ function Catalogo() {
         if (filtros.ubicaciones.length > 0) {
           const ubic = [p.ciudad, p.distrito, p.pais].filter(Boolean).join(" ").toLowerCase();
           if (!filtros.ubicaciones.some((u) => ubic.includes(u.toLowerCase()))) return false;
-        }
-
-        /* rango de experiencia */
-        if (filtros.rangosExp?.length > 0) {
-          const meses = calcMesesExp(p.experiencia);
-          const rango = rangoExp(meses) || "Sin experiencia";
-          if (!filtros.rangosExp.includes(rango)) return false;
         }
 
         /* favoritos */
@@ -241,15 +240,16 @@ function Catalogo() {
   };
 
   const cantFiltros =
-    (filtros.areas?.length          || 0) +
+    (filtros.areasActuales?.length  || 0) +
+    (filtros.areasAnteriores?.length|| 0) +
     (filtros.skills?.length         || 0) +
     (filtros.idiomas?.length        || 0) +
     (filtros.nivelEducacion?.length || 0) +
     (filtros.generos?.length        || 0) +
     (filtros.ubicaciones?.length    || 0) +
-    (filtros.rangosExp?.length      || 0) +
     (filtros.soloFavoritos    ? 1 : 0) +
-    (filtros.soloConProyectos ? 1 : 0);
+    (filtros.soloConProyectos ? 1 : 0) +
+    (filtros.soloConRotaciones? 1 : 0);
 
   if (loading) return (
     <div className="pantalla-carga">
