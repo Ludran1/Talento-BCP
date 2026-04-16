@@ -78,10 +78,6 @@ function Auth() {
   /* ── REGISTRO (solo practicantes) ── */
   const handleRegistro = async () => {
     setError("");
-    if (esLider) {
-      setError("Los líderes usan las credenciales asignadas por TI. Usa la pestaña Iniciar Sesión.");
-      return;
-    }
     if (!nombre.trim())    { setError("Ingresa tu nombre completo."); return; }
     if (!email.trim())     { setError("Ingresa tu correo."); return; }
     if (password.length < 6) { setError("La contraseña debe tener al menos 6 caracteres."); return; }
@@ -223,13 +219,6 @@ function Auth() {
               onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
             />
           </div>
-
-          {/* Advertencia registro líder */}
-          {modo === "registro" && esLider && (
-            <div className="auth-nota">
-              <FiInfo size={12}/> Los líderes no se auto-registran. Cambia a la pestaña <strong>Iniciar Sesión</strong> y usa tus credenciales de TI.
-            </div>
-          )}
 
           <button
             className="auth-btn-primary"
