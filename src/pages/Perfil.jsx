@@ -3,7 +3,7 @@ import { db, auth } from "../firebase/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, query, where, getDocs, updateDoc, doc } from "firebase/firestore";
 import Swal from "sweetalert2";
-import Navbar from "./Navbar.jsx";
+import Navbar from "../components/Navbar.jsx";
 import "../stylesheets/Perfil.css";
 
 import { FiEdit2, FiPlus, FiTrash2, FiArrowUp, FiArrowDown, FiX, FiCheck,

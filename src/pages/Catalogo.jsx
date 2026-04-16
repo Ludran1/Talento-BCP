@@ -1,26 +1,24 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { db, auth } from "../firebase/firebase";
 import {
   collection, getDocs, doc, getDoc,
   updateDoc, arrayUnion, arrayRemove,
   query, where,
 } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 import Filtros from "./Filtros.jsx";
-import Navbar from "./Navbar.jsx";
+import { useRol } from "../hooks/useRol";
 import "../stylesheets/Catalogo.css";
 
 import {
   FiMapPin, FiStar, FiMail, FiPhone, FiArrowLeft,
-  FiExternalLink, FiX, FiFilter,
+  FiExternalLink, FiX,
 } from "react-icons/fi";
 import {
-  MdSchool, MdLanguage, MdRocketLaunch, MdBolt, MdMenuBook,
+  MdSchool, MdRocketLaunch, MdBolt, MdMenuBook,
 } from "react-icons/md";
 import { HiOutlineBriefcase, HiOutlineOfficeBuilding } from "react-icons/hi";
 import { BsTrophy } from "react-icons/bs";
-import { TbCertificate } from "react-icons/tb";
 import { IoSearchOutline } from "react-icons/io5";
 import { RiTeamLine } from "react-icons/ri";
 import { AiOutlineSafety } from "react-icons/ai";
@@ -31,12 +29,9 @@ const calcComp = (p) => {
   const c = [
     p.titulo, p.resumen, p.area, p.intereses,
     p.telefono, p.distrito || p.ciudad,
-    p.experiencia?.length > 0,
-    p.educacion?.length   > 0,
-    p.idiomas?.length     > 0,
-    p.cursos?.length      > 0,
-    p.skills?.length      > 0,
-    p.habilidadesBlandas?.length > 0,
+    p.experiencia?.length > 0, p.educacion?.length > 0,
+    p.idiomas?.length > 0, p.cursos?.length > 0,
+    p.skills?.length > 0, p.habilidadesBlandas?.length > 0,
   ];
   return Math.round(c.filter(Boolean).length / c.length * 100);
 };
@@ -66,21 +61,17 @@ const rangoExp = (m) => {
   return "+12 meses";
 };
 
-/* ── Estado inicial de filtros ──
-   IMPORTANTE: usa "rotaciones" (campo real en Firestore),
-   NO "areasRotacion" (nombre incorrecto anterior).           */
 const FILTROS_INIT = {
-  busqueda: "",
-  areasActuales:    [],   // filtra por p.area
-  areasAnteriores:  [],   // filtra por p.rotaciones[].area
+  busqueda:         "",
+  areas:            [],
   skills:           [],
   idiomas:          [],
   nivelEducacion:   [],
   generos:          [],
-  ubicaciones:      [],   // filtra por ciudad o distrito
+  ubicaciones:      [],
+  rangosExp:        [],
   soloFavoritos:    false,
   soloConProyectos: false,
-  soloConRotaciones:false,
 };
 
 /* ══════════════════════════════════════════
@@ -89,33 +80,16 @@ const FILTROS_INIT = {
 function Catalogo() {
   const navigate = useNavigate();
 
+  /* ── Rol desde Firestore (NO por dominio de correo) ── */
+  const { user, rol, docId: liderDocId, favIds, setFavIds } = useRol();
+  const esLider = rol === "lider";
+
   const [perfiles,     setPerfiles]     = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [filtros,      setFiltros]      = useState(FILTROS_INIT);
   const [panelAbierto, setPanelAbierto] = useState(false);
   const [perfilModal,  setPerfilModal]  = useState(null);
   const [loadingModal, setLoadingModal] = useState(false);
-  const [esLider,      setEsLider]      = useState(false);
-  const [liderDocId,   setLiderDocId]   = useState(null);
-  const [favIds,       setFavIds]       = useState([]);
-
-  /* auth — esLider se determina buscando uid en colección "lideres",
-     NO por dominio del correo (practicantes también pueden tener @bcp.com) */
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (u) => {
-      if (!u) return;
-      const snap = await getDocs(query(collection(db, "lideres"), where("uid", "==", u.uid)));
-      if (!snap.empty) {
-        setEsLider(true);
-        const d = snap.docs[0];
-        setLiderDocId(d.id);
-        setFavIds(d.data().favoritos || []);
-      } else {
-        setEsLider(false);
-      }
-    });
-    return () => unsub();
-  }, []);
 
   /* cargar perfiles */
   useEffect(() => {
@@ -123,9 +97,7 @@ function Catalogo() {
       try {
         const snap = await getDocs(collection(db, "practicantes"));
         setPerfiles(snap.docs.map((d) => ({
-          id: d.id,
-          ...d.data(),
-          completitud: calcComp(d.data()),
+          id: d.id, ...d.data(), completitud: calcComp(d.data()),
         })));
       } catch (err) { console.error(err); }
       finally { setLoading(false); }
@@ -133,79 +105,71 @@ function Catalogo() {
     cargar();
   }, []);
 
-  /* skills dinámicos para el panel */
+  /* skills dinámicos */
   const skillsDisponibles = useMemo(() => {
     const set = new Set();
     perfiles.forEach((p) => (p.skills || []).forEach((s) => s && set.add(s.trim())));
     return [...set].sort();
   }, [perfiles]);
 
-  /* ── FILTRADO ──
-     FIX PRINCIPAL: p.rotaciones (no p.areasRotacion)        */
+  /* ciudades dinámicas */
+  const ciudadesDisponibles = useMemo(() => {
+    const set = new Set();
+    perfiles.forEach((p) => { if (p.ciudad) set.add(p.ciudad.trim()); });
+    return [...set].sort();
+  }, [perfiles]);
+
+  /* FILTRADO */
   const filtrados = useMemo(() => {
     const txt = filtros.busqueda.toLowerCase().trim();
     return perfiles
       .filter((p) => {
         if (p.completitud < 40) return false;
 
-        /* texto libre — incluye logros de rotaciones */
         if (txt) {
           const hay = [
             p.nombre, p.titulo, p.area, p.intereses, p.distrito, p.ciudad, p.pais,
-            ...(p.skills || []),
-            ...(p.habilidadesBlandas || []),
-            /* ← campo correcto */
+            ...(p.skills || []), ...(p.habilidadesBlandas || []),
             ...(p.rotaciones || []).map((r) => `${r.area} ${r.logros || ""}`),
           ].filter(Boolean).join(" ").toLowerCase();
           if (!hay.includes(txt)) return false;
         }
 
-        /* área ACTUAL */
-        if (filtros.areasActuales.length > 0 && !filtros.areasActuales.includes(p.area))
-          return false;
-
-        /* área ANTERIOR ← campo correcto */
-        if (filtros.areasAnteriores.length > 0) {
-          const areasRot = (p.rotaciones || []).map((r) => r.area);
-          if (!filtros.areasAnteriores.some((a) => areasRot.includes(a))) return false;
+        if (filtros.areas?.length > 0) {
+          const todasAreas = [p.area, ...(p.rotaciones || []).map((r) => r.area)].filter(Boolean);
+          if (!filtros.areas.some((a) => todasAreas.includes(a))) return false;
         }
 
-        /* solo con historial BCP ← campo correcto */
-        if (filtros.soloConRotaciones && !(p.rotaciones?.length > 0)) return false;
-
-        /* skills */
         if (filtros.skills.length > 0) {
-          const sp = [...(p.skills || []), ...(p.habilidadesBlandas || [])].map((s) => s.trim());
-          if (!filtros.skills.some((s) => sp.includes(s))) return false;
+          const sp = [...(p.skills || []), ...(p.habilidadesBlandas || [])].map((s) => s.trim().toLowerCase());
+          if (!filtros.skills.some((s) => sp.includes(s.toLowerCase()))) return false;
         }
 
-        /* idiomas */
         if (filtros.idiomas.length > 0) {
-          const ip = (p.idiomas || []).map((i) => i.idioma || i);
-          if (!filtros.idiomas.some((i) => ip.includes(i))) return false;
+          const ip = (p.idiomas || []).map((i) => (i.idioma || i).toLowerCase());
+          if (!filtros.idiomas.some((i) => ip.includes(i.toLowerCase()))) return false;
         }
 
-        /* nivel educación */
         if (filtros.nivelEducacion.length > 0) {
           const np = (p.educacion || []).map((e) => e.nivel);
           if (!filtros.nivelEducacion.some((n) => np.includes(n))) return false;
         }
 
-        /* género */
         if (filtros.generos.length > 0) {
           if (!filtros.generos.includes(p.genero)) return false;
         }
 
-        /* ubicación */
         if (filtros.ubicaciones.length > 0) {
           const ubic = [p.ciudad, p.distrito, p.pais].filter(Boolean).join(" ").toLowerCase();
           if (!filtros.ubicaciones.some((u) => ubic.includes(u.toLowerCase()))) return false;
         }
 
-        /* favoritos */
-        if (filtros.soloFavoritos && !favIds.includes(p.id)) return false;
+        if (filtros.rangosExp?.length > 0) {
+          const rango = rangoExp(calcMesesExp(p.experiencia)) || "Sin experiencia";
+          if (!filtros.rangosExp.includes(rango)) return false;
+        }
 
-        /* proyectos */
+        if (filtros.soloFavoritos && !favIds.includes(p.id)) return false;
         if (filtros.soloConProyectos && !(p.proyectos?.length > 0)) return false;
 
         return true;
@@ -213,7 +177,7 @@ function Catalogo() {
       .sort((a, b) => b.completitud - a.completitud);
   }, [perfiles, filtros, favIds]);
 
-  /* abrir modal rápido */
+  /* modal */
   const abrirModal = async (p) => {
     setPerfilModal(p);
     setLoadingModal(true);
@@ -225,7 +189,7 @@ function Catalogo() {
     finally { setLoadingModal(false); }
   };
 
-  /* toggle favorito */
+  /* toggle favorito — solo líderes */
   const toggleFav = async (e, pid) => {
     e.stopPropagation();
     if (!esLider || !liderDocId) return;
@@ -240,28 +204,24 @@ function Catalogo() {
   };
 
   const cantFiltros =
-    (filtros.areasActuales?.length  || 0) +
-    (filtros.areasAnteriores?.length|| 0) +
+    (filtros.areas?.length          || 0) +
     (filtros.skills?.length         || 0) +
     (filtros.idiomas?.length        || 0) +
     (filtros.nivelEducacion?.length || 0) +
     (filtros.generos?.length        || 0) +
     (filtros.ubicaciones?.length    || 0) +
+    (filtros.rangosExp?.length      || 0) +
     (filtros.soloFavoritos    ? 1 : 0) +
-    (filtros.soloConProyectos ? 1 : 0) +
-    (filtros.soloConRotaciones? 1 : 0);
+    (filtros.soloConProyectos ? 1 : 0);
 
   if (loading) return (
-    <div className="pantalla-carga">
-      <div className="spinner-bcp"/>
-      <p>Cargando talento...</p>
-    </div>
+    <div className="pantalla-carga"><div className="spinner-bcp"/><p>Cargando talento...</p></div>
   );
 
   return (
     <div className="cat-wrapper">
 
-      {/* ─── TOPBAR ─── */}
+      {/* TOPBAR */}
       <div className="cat-topbar">
         <div className="cat-search-wrap">
           <IoSearchOutline className="cat-search-icon" size={17}/>
@@ -279,20 +239,18 @@ function Catalogo() {
         </div>
       </div>
 
-      {/* ─── BODY ─── */}
+      {/* BODY */}
       <div className="cat-body">
-
-        {/* PANEL FILTROS */}
         <Filtros
           filtros={filtros}
           onChange={setFiltros}
           skillsDisponibles={skillsDisponibles}
+          ciudadesDisponibles={ciudadesDisponibles}
           esLider={esLider}
           abierto={panelAbierto}
           onCerrar={() => setPanelAbierto(false)}
         />
 
-        {/* GRID */}
         <div className="cat-grid-area">
           <div className="cat-section-header">
             <h2 className="cat-section-titulo">Talento BCP</h2>
@@ -332,7 +290,6 @@ function Catalogo() {
         </div>
       </div>
 
-      {/* MODAL */}
       {perfilModal && (
         <ModalPerfil
           perfil={perfilModal}
@@ -348,9 +305,7 @@ function Catalogo() {
   );
 }
 
-/* ══════════════════════════════════════════
-   TARJETA PRACTICANTE
-══════════════════════════════════════════ */
+/* ── TARJETA ── */
 function TarjetaPracticante({ perfil, esFav, esLider, onToggleFav, onVerPerfil }) {
   const ubicacion = [perfil.ciudad, perfil.pais].filter(Boolean).join(", ") || perfil.distrito || null;
   const nivelEdu  = perfil.educacion?.[0]
@@ -360,15 +315,8 @@ function TarjetaPracticante({ perfil, esFav, esLider, onToggleFav, onVerPerfil }
   const rango = rangoExp(meses);
   const tecnicas = (perfil.skills || []).slice(0, 4);
   const blandas  = (perfil.habilidadesBlandas || []).slice(0, 2);
-
-  /* ← campo correcto: rotaciones (no areasRotacion) */
-  const areasAnteriores = (perfil.rotaciones || [])
-    .map((r) => r.area)
-    .filter((a) => a && a !== perfil.area);
-
-  const compColor =
-    perfil.completitud >= 80 ? "#16a34a" :
-    perfil.completitud >= 60 ? "#d97706" : "#dc2626";
+  const areasAnteriores = (perfil.rotaciones || []).map((r) => r.area).filter((a) => a && a !== perfil.area);
+  const compColor = perfil.completitud >= 80 ? "#16a34a" : perfil.completitud >= 60 ? "#d97706" : "#dc2626";
 
   return (
     <div className="tc-card" onClick={onVerPerfil}>
@@ -376,6 +324,7 @@ function TarjetaPracticante({ perfil, esFav, esLider, onToggleFav, onVerPerfil }
         <div className="tc-comp-fill" style={{ width:`${perfil.completitud}%`, background:compColor }}/>
       </div>
 
+      {/* Estrella solo para líderes */}
       {esLider && (
         <button
           className={`tc-fav ${esFav ? "tc-fav-on" : ""}`}
@@ -406,11 +355,9 @@ function TarjetaPracticante({ perfil, esFav, esLider, onToggleFav, onVerPerfil }
         <div className="tc-areas">
           <span className="tc-area-chip tc-area-actual">{perfil.area}</span>
           {areasAnteriores.slice(0, 1).map((a, i) => (
-            <span key={i} className="tc-area-chip tc-area-anterior" title="Área anterior">{a}</span>
+            <span key={i} className="tc-area-chip tc-area-anterior">{a}</span>
           ))}
-          {areasAnteriores.length > 1 && (
-            <span className="tc-area-mas">+{areasAnteriores.length - 1}</span>
-          )}
+          {areasAnteriores.length > 1 && <span className="tc-area-mas">+{areasAnteriores.length - 1}</span>}
         </div>
       )}
 
@@ -419,9 +366,7 @@ function TarjetaPracticante({ perfil, esFav, esLider, onToggleFav, onVerPerfil }
           <MdBolt size={12} className="tc-tags-icon"/>
           <div className="tc-tags">
             {tecnicas.map((s, i) => <span key={i} className="tc-tag tc-tag-tec">{s.trim()}</span>)}
-            {(perfil.skills || []).length > 4 && (
-              <span className="tc-tag-mas">+{perfil.skills.length - 4}</span>
-            )}
+            {(perfil.skills || []).length > 4 && <span className="tc-tag-mas">+{perfil.skills.length - 4}</span>}
           </div>
         </div>
       )}
@@ -436,18 +381,14 @@ function TarjetaPracticante({ perfil, esFav, esLider, onToggleFav, onVerPerfil }
       )}
 
       <div className="tc-footer">
-        <span className="tc-comp-label" style={{ color: compColor }}>
-          {perfil.completitud}% completado
-        </span>
+        <span className="tc-comp-label" style={{ color: compColor }}>{perfil.completitud}% completado</span>
         <span className="tc-ver-link">Ver perfil →</span>
       </div>
     </div>
   );
 }
 
-/* ══════════════════════════════════════════
-   MODAL PERFIL RÁPIDO
-══════════════════════════════════════════ */
+/* ── MODAL PERFIL RÁPIDO ── */
 function ModalPerfil({ perfil, cargando, esFav, esLider, onToggleFav, onCerrar, onVerCompleto }) {
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -457,11 +398,7 @@ function ModalPerfil({ perfil, cargando, esFav, esLider, onToggleFav, onCerrar, 
   const ubicacion = [perfil.ciudad, perfil.pais].filter(Boolean).join(", ") || perfil.distrito || null;
   const meses     = calcMesesExp(perfil.experiencia);
   const rango     = rangoExp(meses);
-
-  /* ← campo correcto: rotaciones */
-  const areasAnteriores = (perfil.rotaciones || []).filter(
-    (r) => r.area && r.area !== perfil.area
-  );
+  const areasAnteriores = (perfil.rotaciones || []).filter((r) => r.area && r.area !== perfil.area);
 
   return (
     <div className="mp-overlay" onClick={onCerrar}>
@@ -473,7 +410,6 @@ function ModalPerfil({ perfil, cargando, esFav, esLider, onToggleFav, onCerrar, 
           <div className="mp-loading"><div className="spinner-bcp"/></div>
         ) : (
           <>
-            {/* HEADER */}
             <div className="mp-header">
               <div className="mp-banner"/>
               <div className="mp-avatar-wrap">
@@ -487,11 +423,9 @@ function ModalPerfil({ perfil, cargando, esFav, esLider, onToggleFav, onCerrar, 
               <div className="mp-header-info">
                 <div className="mp-nombre-row">
                   <h3 className="mp-nombre">{perfil.nombre} {perfil.apellidos}</h3>
+                  {/* ⭐ solo líderes */}
                   {esLider && (
-                    <button
-                      className={`mp-fav-btn ${esFav ? "mp-fav-on" : ""}`}
-                      onClick={onToggleFav}
-                    >
+                    <button className={`mp-fav-btn ${esFav ? "mp-fav-on" : ""}`} onClick={onToggleFav}>
                       <FiStar size={13} style={{marginRight:4}}/>
                       {esFav ? "Guardado" : "Guardar"}
                     </button>
@@ -503,11 +437,8 @@ function ModalPerfil({ perfil, cargando, esFav, esLider, onToggleFav, onCerrar, 
                 <div className="mp-areas">
                   {perfil.area && <span className="tc-area-chip tc-area-actual">{perfil.area}</span>}
                   {areasAnteriores.map((r, i) => (
-                    <span
-                      key={i}
-                      className="tc-area-chip tc-area-anterior"
-                      title={`${r.desdeM} ${r.desdeA} – ${r.actualmente ? "Actualidad" : `${r.hastaM} ${r.hastaA}`}`}
-                    >
+                    <span key={i} className="tc-area-chip tc-area-anterior"
+                      title={`${r.desdeM} ${r.desdeA} – ${r.actualmente ? "Actualidad" : `${r.hastaM} ${r.hastaA}`}`}>
                       {r.area}
                     </span>
                   ))}
@@ -515,15 +446,13 @@ function ModalPerfil({ perfil, cargando, esFav, esLider, onToggleFav, onCerrar, 
               </div>
             </div>
 
-            {/* BODY */}
             <div className="mp-body">
-
-              {/* COL IZQUIERDA */}
               <div className="mp-col-izq">
                 <MpSeccion titulo="Contacto">
                   {ubicacion       && <MpDato Icon={FiMapPin}  val={ubicacion}/>}
-                  {perfil.telefono && <MpDato Icon={FiPhone}    val={perfil.telefono}/>}
-                  {perfil.email    && <MpDato Icon={FiMail}     val={perfil.email}/>}
+                  {perfil.telefono && <MpDato Icon={FiPhone}   val={perfil.telefono}/>}
+                  {/* Email — solo líderes lo ven */}
+                  {esLider && perfil.email && <MpDato Icon={FiMail} val={perfil.email}/>}
                   {perfil.linkedin && (
                     <a href={perfil.linkedin} target="_blank" rel="noopener noreferrer" className="mp-link">
                       <FaLinkedin size={13}/> LinkedIn
@@ -536,7 +465,6 @@ function ModalPerfil({ perfil, cargando, esFav, esLider, onToggleFav, onCerrar, 
                   )}
                 </MpSeccion>
 
-                {/* HISTORIAL BCP ← campo correcto */}
                 {areasAnteriores.length > 0 && (
                   <MpSeccion titulo="Historial BCP">
                     {areasAnteriores.map((r, i) => (
@@ -578,25 +506,33 @@ function ModalPerfil({ perfil, cargando, esFav, esLider, onToggleFav, onCerrar, 
                   </MpSeccion>
                 )}
 
+                {/* Documentos solo para líderes */}
+                {esLider && perfil.documentos?.length > 0 && (
+                  <MpSeccion titulo="Documentos">
+                    {perfil.documentos.map((d, i) => (
+                      <a key={i} href={d.url} target="_blank" rel="noopener noreferrer" className="mp-link" style={{display:"block", marginBottom:4}}>
+                        📎 {d.nombre}
+                      </a>
+                    ))}
+                  </MpSeccion>
+                )}
+
                 {perfil.movilidad && (
                   <MpSeccion titulo="Disponibilidad">
                     <div className="mp-movilidad">
-                      <span className={`mp-mov ${perfil.movilidad.viajar ? "mp-mov-si":"mp-mov-no"}`}>{perfil.movilidad.viajar?"✓":"✗"} Viajar</span>
-                      <span className={`mp-mov ${perfil.movilidad.reubicacion ? "mp-mov-si":"mp-mov-no"}`}>{perfil.movilidad.reubicacion?"✓":"✗"} Reubicación</span>
-                      <span className={`mp-mov ${perfil.movilidad.vehiculo ? "mp-mov-si":"mp-mov-no"}`}>{perfil.movilidad.vehiculo?"✓":"✗"} Vehículo</span>
+                      <span className={`mp-mov ${perfil.movilidad.viajar?"mp-mov-si":"mp-mov-no"}`}>{perfil.movilidad.viajar?"✓":"✗"} Viajar</span>
+                      <span className={`mp-mov ${perfil.movilidad.reubicacion?"mp-mov-si":"mp-mov-no"}`}>{perfil.movilidad.reubicacion?"✓":"✗"} Reubicación</span>
+                      <span className={`mp-mov ${perfil.movilidad.vehiculo?"mp-mov-si":"mp-mov-no"}`}>{perfil.movilidad.vehiculo?"✓":"✗"} Vehículo</span>
                     </div>
                   </MpSeccion>
                 )}
               </div>
 
-              {/* COL DERECHA */}
               <div className="mp-col-der">
                 {perfil.resumen && (
                   <MpSeccion titulo="Perfil Profesional">
                     <p className="mp-resumen">{perfil.resumen}</p>
-                    {perfil.intereses && (
-                      <p className="mp-intereses"><strong>Intereses:</strong> {perfil.intereses}</p>
-                    )}
+                    {perfil.intereses && <p className="mp-intereses"><strong>Intereses:</strong> {perfil.intereses}</p>}
                   </MpSeccion>
                 )}
 
@@ -676,11 +612,11 @@ function ModalPerfil({ perfil, cargando, esFav, esLider, onToggleFav, onCerrar, 
               </div>
             </div>
 
-            {/* FOOTER */}
             <div className="mp-footer">
               <button className="mp-btn-volver-footer" onClick={onCerrar}>
                 <FiArrowLeft size={14} style={{marginRight:5}}/>Volver
               </button>
+              {/* Contactar solo líderes */}
               {esLider && perfil.email && (
                 <a href={`mailto:${perfil.email}?subject=Oportunidad BCP`} className="mp-btn-contactar">
                   <FiMail size={13} style={{marginRight:5}}/>Contactar
@@ -698,12 +634,7 @@ function ModalPerfil({ perfil, cargando, esFav, esLider, onToggleFav, onCerrar, 
 }
 
 function MpSeccion({ titulo, children }) {
-  return (
-    <div className="mp-seccion">
-      <h6 className="mp-seccion-t">{titulo}</h6>
-      {children}
-    </div>
-  );
+  return <div className="mp-seccion"><h6 className="mp-seccion-t">{titulo}</h6>{children}</div>;
 }
 function MpDato({ Icon, val }) {
   return (
@@ -713,6 +644,5 @@ function MpDato({ Icon, val }) {
     </p>
   );
 }
-
 
 export default Catalogo;

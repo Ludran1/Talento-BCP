@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { db, auth } from "../firebase/firebase";
+import { db } from "../firebase/firebase";
 import { doc, getDoc, updateDoc, arrayUnion, arrayRemove } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
-import { collection, query, where, getDocs } from "firebase/firestore";
-import Navbar from "./Navbar.jsx";
+import Navbar from "../components/Navbar.jsx";
+import { useRol } from "../hooks/useRol";
 import "../stylesheets/Perfil.css";
 
 import {
@@ -25,33 +24,18 @@ function PerfilPublico() {
   const { id }   = useParams();
   const navigate = useNavigate();
 
-  const [perfil,     setPerfil]     = useState(null);
-  const [cargando,   setCargando]   = useState(true);
-  const [usuario,    setUsuario]    = useState(null);
-  const [esLider,    setEsLider]    = useState(false);
-  const [favorito,   setFavorito]   = useState(false);
-  const [liderDocId, setLiderDocId] = useState(null);
+  /* ── Rol desde Firestore (NO por dominio de correo) ── */
+  const { user: usuario, rol, docId: liderDocId, favIds } = useRol();
+  const esLider = rol === "lider";
 
-  /* ── Auth ── */
+  const [perfil,   setPerfil]   = useState(null);
+  const [cargando, setCargando] = useState(true);
+  const [favorito, setFavorito] = useState(false);
+
+  /* Inicializar favorito cuando cambie favIds */
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (u) => {
-      setUsuario(u);
-      if (!u) return;
-      const esL = !!u.email?.endsWith("@bcp.com");
-      setEsLider(esL);
-      if (esL) {
-        const snap = await getDocs(
-          query(collection(db, "lideres"), where("uid", "==", u.uid))
-        );
-        if (!snap.empty) {
-          const d = snap.docs[0];
-          setLiderDocId(d.id);
-          setFavorito((d.data().favoritos || []).includes(id));
-        }
-      }
-    });
-    return () => unsub();
-  }, [id]);
+    setFavorito(favIds.includes(id));
+  }, [favIds, id]);
 
   /* ── Cargar perfil ── */
   useEffect(() => {
@@ -65,7 +49,7 @@ function PerfilPublico() {
     cargar();
   }, [id]);
 
-  /* ── Toggle favorito ── */
+  /* ── Toggle favorito — solo líderes ── */
   const toggleFav = async () => {
     if (!esLider || !liderDocId) return;
     const ref = doc(db, "lideres", liderDocId);

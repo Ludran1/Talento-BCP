@@ -1,25 +1,25 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { db, auth } from "../firebase/firebase";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { signOut } from "firebase/auth";
 import {
   collection, query, where, getDocs,
   doc, getDoc, updateDoc, arrayRemove,
-  addDoc, deleteDoc, serverTimestamp,
+  addDoc, serverTimestamp, deleteDoc,
 } from "firebase/firestore";
-
+import { useRol } from "../hooks/useRol";
+import Navbar from "../components/Navbar.jsx";
 import "../stylesheets/DashboardLider.css";
 
 import {
-  FiStar, FiMail, FiMapPin, FiUsers, FiTrendingUp,
-  FiAward, FiLogOut, FiPlus, FiEdit2, FiTrash2,
-  FiCheck, FiX, FiEye, FiBriefcase, FiClock,
+  FiStar, FiMail, FiMapPin, FiUsers,
+  FiTrendingUp, FiLogOut, FiBriefcase,
+  FiPlusCircle, FiTrash2, FiEdit2, FiEye,
 } from "react-icons/fi";
 import { MdBolt } from "react-icons/md";
 import { HiOutlineBriefcase, HiOutlineOfficeBuilding } from "react-icons/hi";
 import { RiTeamLine } from "react-icons/ri";
 import { IoSearchOutline } from "react-icons/io5";
-import { AiOutlineBarChart } from "react-icons/ai";
 
 /* ── helpers ── */
 const calcComp = (p) => {
@@ -32,24 +32,9 @@ const calcComp = (p) => {
   return Math.round(c.filter(Boolean).length / c.length * 100);
 };
 
-const AREAS_BCP = [
-  "Analítica & Tecnología","Finanzas & Control","Gestión & Operaciones",
-  "Comunicación & Relación","Riesgos & Cumplimiento","Marketing & Experiencia Cliente",
-];
-
-const MODALIDAD_OPC = ["Presencial","Remoto","Híbrido"];
-const JORNADA_OPC   = ["Tiempo completo","Medio tiempo","Por proyecto"];
-const ESTADO_OPC    = ["Abierta","En revisión","Cerrada"];
-
-const ESTADO_COLORS = {
-  "Abierta":     { bg:"#d1fae5", color:"#065f46", dot:"#10b981" },
-  "En revisión": { bg:"#fef3c7", color:"#92400e", dot:"#f59e0b" },
-  "Cerrada":     { bg:"#f3f4f6", color:"#6b7280", dot:"#9ca3af" },
-};
-
-/* ── Gráficos SVG ── */
+/* ── Gráfico barras horizontales ── */
 function HBarChart({ data, color = "#003DA5" }) {
-  if (!data.length) return <p className="dl-empty-txt">Sin datos</p>;
+  if (!data.length) return <p className="dl-empty-txt">Sin datos aún</p>;
   const max = Math.max(...data.map((d) => d.value), 1);
   return (
     <div className="dl-hbar-list">
@@ -66,14 +51,15 @@ function HBarChart({ data, color = "#003DA5" }) {
   );
 }
 
+/* ── Dona SVG ── */
 function DonutChart({ segments, size = 120 }) {
   const r = 42; const cx = size/2; const cy = size/2;
-  const circ = 2 * Math.PI * r;
-  const total = segments.reduce((s,d) => s + d.value, 0) || 1;
+  const circ = 2*Math.PI*r;
+  const total = segments.reduce((s,d) => s+d.value, 0) || 1;
   let offset = 0;
   const arcs = segments.map((seg) => {
     const dash = (seg.value/total)*circ;
-    const arc = { ...seg, dash, offset: circ - offset };
+    const arc  = { ...seg, dash, offset: circ-offset };
     offset += dash;
     return arc;
   });
@@ -81,145 +67,141 @@ function DonutChart({ segments, size = 120 }) {
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
       <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f3f4f6" strokeWidth={18}/>
       {arcs.map((arc,i) => (
-        <circle key={i} cx={cx} cy={cy} r={r} fill="none" stroke={arc.color}
-          strokeWidth={18} strokeDasharray={`${arc.dash} ${circ}`} strokeDashoffset={arc.offset}
-          style={{transform:"rotate(-90deg)",transformOrigin:"center"}}/>
+        <circle key={i} cx={cx} cy={cy} r={r} fill="none" stroke={arc.color} strokeWidth={18}
+          strokeDasharray={`${arc.dash} ${circ}`} strokeDashoffset={arc.offset}
+          style={{transform:"rotate(-90deg)", transformOrigin:"center"}}/>
       ))}
       <text x={cx} y={cy+6} textAnchor="middle" fontSize={20} fontWeight="800" fill="#111827">{total}</text>
     </svg>
   );
 }
 
+/* ── Sparkline ── */
 function SparkLine({ values, color="#003DA5", width=100, height=40 }) {
   if (values.length < 2) return null;
-  const max = Math.max(...values,1); const min = Math.min(...values);
-  const rng = max-min||1;
-  const pts = values.map((v,i) => {
-    const x = (i/(values.length-1))*width;
-    const y = height-((v-min)/rng)*(height-8)-4;
+  const max=Math.max(...values,1); const min=Math.min(...values); const rng=max-min||1;
+  const pts=values.map((v,i) => {
+    const x=(i/(values.length-1))*width;
+    const y=height-((v-min)/rng)*(height-8)-4;
     return `${x},${y}`;
   });
-  const area = `M${pts[0]} ${pts.slice(1).map(p=>`L${p}`).join(" ")} L${width},${height} L0,${height} Z`;
-  const line = `M${pts[0]} ${pts.slice(1).map(p=>`L${p}`).join(" ")}`;
+  const area=`M${pts[0]} ${pts.slice(1).map(p=>`L${p}`).join(" ")} L${width},${height} L0,${height} Z`;
+  const line=`M${pts[0]} ${pts.slice(1).map(p=>`L${p}`).join(" ")}`;
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{overflow:"visible"}}>
       <path d={area} fill={color} fillOpacity={0.12}/>
       <path d={line} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round"/>
       {values.map((v,i) => {
-        const x = (i/(values.length-1))*width;
-        const y = height-((v-min)/rng)*(height-8)-4;
+        const x=(i/(values.length-1))*width;
+        const y=height-((v-min)/rng)*(height-8)-4;
         return <circle key={i} cx={x} cy={y} r={2.5} fill={color}/>;
       })}
     </svg>
   );
 }
 
-/* ══════════════════════════════════════════
+const AREAS_BCP = [
+  "Analítica & Tecnología","Finanzas & Control","Gestión & Operaciones",
+  "Comunicación & Relación","Riesgos & Cumplimiento","Marketing & Experiencia Cliente",
+];
+
+/* ════════════════════════════════════════════
    DASHBOARD LÍDER
-══════════════════════════════════════════ */
+   Acceso: rol === "lider" (verificado por Firestore, no por correo)
+════════════════════════════════════════════ */
 function DashboardLider() {
   const navigate = useNavigate();
 
-  const [usuario,      setUsuario]      = useState(null);
+  /* ── Verificación de rol por Firestore ── */
+  const { user, rol, docId: liderDocId, cargando: cargandoRol } = useRol();
+
   const [liderData,    setLiderData]    = useState(null);
-  const [liderDocId,   setLiderDocId]   = useState(null);
   const [practicantes, setPracticantes] = useState([]);
   const [favoritos,    setFavoritos]    = useState([]);
   const [vacantes,     setVacantes]     = useState([]);
   const [cargando,     setCargando]     = useState(true);
   const [tabActiva,    setTabActiva]    = useState("metricas");
   const [busqFav,      setBusqFav]      = useState("");
+  const [modalVacante, setModalVacante] = useState(false);
+  const [vacanteEdit,  setVacanteEdit]  = useState(null);
 
-  /* modal vacante */
-  const [modalVacante,    setModalVacante]    = useState(false);
-  const [vacantEdit,      setVacantEdit]      = useState(null); // null = nueva
-  const [vacForm,         setVacForm]         = useState(vacFormInit());
-  const [guardandoVac,    setGuardandoVac]    = useState(false);
-  const [confirmDelete,   setConfirmDelete]   = useState(null);
-
-  function vacFormInit() {
-    return {
-      titulo:      "",
-      area:        "",
-      descripcion: "",
-      requisitos:  "",
-      modalidad:   "Presencial",
-      jornada:     "Tiempo completo",
-      estado:      "Abierta",
-      ubicacion:   "Lima",
-    };
-  }
-
+  /* Guard — redirige si no es líder */
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (u) => {
-      if (!u) { navigate("/auth"); return; }
-      setUsuario(u);
+    if (!cargandoRol && (!user || rol !== "lider")) {
+      navigate("/auth");
+    }
+  }, [cargandoRol, user, rol, navigate]);
+
+  /* Cargar datos */
+  useEffect(() => {
+    if (!liderDocId) return;
+    const cargar = async () => {
       try {
-        const lSnap = await getDocs(query(collection(db,"lideres"), where("uid","==",u.uid)));
-        /* Si el uid NO está en "lideres", no tiene acceso al dashboard */
-        if (lSnap.empty) { navigate("/perfil"); return; }
-        let liderDoc = null;
-        lSnap.forEach((d) => { liderDoc = { id:d.id, ...d.data() }; });
-        if (liderDoc) { setLiderData(liderDoc); setLiderDocId(liderDoc.id); }
+        /* Info del líder */
+        const lSnap = await getDocs(query(collection(db, "lideres"), where("uid", "==", user.uid)));
+        lSnap.forEach((d) => setLiderData({ id: d.id, ...d.data() }));
 
-        const pSnap = await getDocs(collection(db,"practicantes"));
-        setPracticantes(pSnap.docs.map((d) => ({ id:d.id, ...d.data() })));
+        /* Practicantes */
+        const pSnap = await getDocs(collection(db, "practicantes"));
+        setPracticantes(pSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
 
-        if (liderDoc?.favoritos?.length) {
+        /* Favoritos */
+        const lDoc = lSnap.docs[0]?.data();
+        if (lDoc?.favoritos?.length) {
           const favs = await Promise.all(
-            liderDoc.favoritos.map(async (fid) => {
-              const s = await getDoc(doc(db,"practicantes",fid));
-              return s.exists() ? { id:fid, ...s.data() } : null;
+            lDoc.favoritos.map(async (fid) => {
+              const s = await getDoc(doc(db, "practicantes", fid));
+              return s.exists() ? { id: fid, ...s.data() } : null;
             })
           );
           setFavoritos(favs.filter(Boolean));
         }
 
-        /* cargar vacantes de este líder */
-        const vSnap = await getDocs(
-          query(collection(db,"vacantes"), where("liderUid","==",u.uid))
-        );
-        setVacantes(vSnap.docs.map((d) => ({ id:d.id, ...d.data() })));
+        /* Vacantes */
+        const vSnap = await getDocs(collection(db, "vacantes"));
+        setVacantes(vSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
 
-      } catch(err) { console.error(err); }
+      } catch (e) { console.error(e); }
       finally { setCargando(false); }
-    });
-    return () => unsub();
-  }, [navigate]);
+    };
+    cargar();
+  }, [liderDocId, user]);
 
-  const quitarFavorito = async (fid) => {
-    await updateDoc(doc(db,"lideres",liderDocId), { favoritos: arrayRemove(fid) });
-    setFavoritos((prev) => prev.filter((f) => f.id !== fid));
+  const quitarFavorito = async (favId) => {
+    await updateDoc(doc(db, "lideres", liderDocId), { favoritos: arrayRemove(favId) });
+    setFavoritos((prev) => prev.filter((f) => f.id !== favId));
   };
 
-  const cerrarSesion = async () => { await signOut(auth); navigate("/"); };
+  const irAPerfil = (pid) => navigate(`/perfil/${pid}`);
 
   /* ── Métricas ── */
-  const total        = practicantes.length;
-  const conExperiencia = practicantes.filter((p) => p.experiencia?.length > 0).length;
-  const conRotaciones  = practicantes.filter((p) => p.rotaciones?.length > 0).length;
-  const conProyectos   = practicantes.filter((p) => p.proyectos?.length > 0).length;
-  const perfilAlto     = practicantes.filter((p) => calcComp(p) >= 70).length;
+  const total      = practicantes.length;
+  const conExp     = practicantes.filter((p) => p.experiencia?.length > 0).length;
+  const conRot     = practicantes.filter((p) => p.rotaciones?.length > 0).length;
+  const perfilAlto = practicantes.filter((p) => calcComp(p) >= 70).length;
+  const conProy    = practicantes.filter((p) => p.proyectos?.length > 0).length;
 
   const areaTop = Object.entries(
-    practicantes.reduce((acc,p) => { if(p.area) acc[p.area]=(acc[p.area]||0)+1; return acc; },{})
-  ).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([label,value])=>({ label:label.split(" ")[0], value }));
+    practicantes.reduce((acc,p) => { if(p.area) acc[p.area]=(acc[p.area]||0)+1; return acc; }, {})
+  ).sort((a,b) => b[1]-a[1]).slice(0,6).map(([label,value]) => ({ label:label.split(" ")[0], value }));
 
   const skillTop = Object.entries(
     practicantes.reduce((acc,p) => {
-      (p.skills||[]).forEach((s)=>{ if(s) acc[s]=(acc[s]||0)+1; }); return acc;
-    },{})
-  ).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([label,value])=>({ label, value }));
+      (p.skills||[]).forEach(s => { if(s) acc[s]=(acc[s]||0)+1; });
+      return acc;
+    }, {})
+  ).sort((a,b) => b[1]-a[1]).slice(0,8).map(([label,value]) => ({ label, value }));
 
   const idiomaTop = Object.entries(
     practicantes.reduce((acc,p) => {
-      (p.idiomas||[]).forEach((i)=>{ const k=i.idioma||i; if(k) acc[k]=(acc[k]||0)+1; }); return acc;
-    },{})
-  ).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([label,value])=>({ label, value }));
+      (p.idiomas||[]).forEach(i => { const k=i.idioma||i; if(k) acc[k]=(acc[k]||0)+1; });
+      return acc;
+    }, {})
+  ).sort((a,b) => b[1]-a[1]).slice(0,6).map(([label,value]) => ({ label, value }));
 
   const generoData = Object.entries(
-    practicantes.reduce((acc,p) => { const g=p.genero||"Sin datos"; acc[g]=(acc[g]||0)+1; return acc; },{})
-  ).sort((a,b)=>b[1]-a[1]).map(([label,value])=>({ label, value }));
+    practicantes.reduce((acc,p) => { const g=p.genero||"Sin datos"; acc[g]=(acc[g]||0)+1; return acc; }, {})
+  ).sort((a,b) => b[1]-a[1]).map(([label,value]) => ({ label, value }));
 
   const compBuckets = { "< 40%":0, "40–60%":0, "60–80%":0, "80–100%":0 };
   practicantes.forEach((p) => {
@@ -230,85 +212,14 @@ function DashboardLider() {
     else compBuckets["80–100%"]++;
   });
 
-  const sparkData = [
-    Math.max(1,total-5), total-3, total-4, total-1, total-2, total,
-  ].map((v) => Math.max(0,v));
+  const sparkData = [Math.max(1,total-5),total-3,total-4,total-1,total-2,total].map(v => Math.max(0,v));
+  const favFiltrados = favoritos.filter(p => !busqFav || p.nombre?.toLowerCase().includes(busqFav.toLowerCase()));
 
-  const favFiltrados = favoritos.filter(
-    (p) => !busqFav || p.nombre?.toLowerCase().includes(busqFav.toLowerCase())
-  );
-
-  const irAPerfil = (pid) => navigate(`/perfil/${pid}`);
-
-  /* ── CRUD VACANTES ── */
-  const abrirCrear = () => {
-    setVacantEdit(null);
-    setVacForm(vacFormInit());
-    setModalVacante(true);
-  };
-
-  const abrirEditar = (v) => {
-    setVacantEdit(v);
-    setVacForm({
-      titulo:      v.titulo      || "",
-      area:        v.area        || "",
-      descripcion: v.descripcion || "",
-      requisitos:  v.requisitos  || "",
-      modalidad:   v.modalidad   || "Presencial",
-      jornada:     v.jornada     || "Tiempo completo",
-      estado:      v.estado      || "Abierta",
-      ubicacion:   v.ubicacion   || "Lima",
-    });
-    setModalVacante(true);
-  };
-
-  const guardarVacante = async () => {
-    if (!vacForm.titulo.trim() || !vacForm.area) {
-      alert("Título y área son obligatorios.");
-      return;
-    }
-    setGuardandoVac(true);
-    try {
-      const payload = {
-        ...vacForm,
-        liderUid:    usuario.uid,
-        liderNombre: liderData?.nombre || usuario.email,
-        liderEmail:  usuario.email,
-        updatedAt:   serverTimestamp(),
-      };
-      if (vacantEdit) {
-        await updateDoc(doc(db,"vacantes",vacantEdit.id), payload);
-        setVacantes((prev) => prev.map((v) => v.id===vacantEdit.id ? { ...v, ...payload } : v));
-      } else {
-        payload.createdAt = serverTimestamp();
-        const ref = await addDoc(collection(db,"vacantes"), payload);
-        setVacantes((prev) => [...prev, { id:ref.id, ...payload }]);
-      }
-      setModalVacante(false);
-    } catch(e) { console.error(e); alert("Error al guardar."); }
-    finally { setGuardandoVac(false); }
-  };
-
-  const eliminarVacante = async (id) => {
-    await deleteDoc(doc(db,"vacantes",id));
-    setVacantes((prev) => prev.filter((v) => v.id !== id));
-    setConfirmDelete(null);
-  };
-
-  const cambiarEstadoVacante = async (v, nuevoEstado) => {
-    await updateDoc(doc(db,"vacantes",v.id), { estado: nuevoEstado });
-    setVacantes((prev) => prev.map((x) => x.id===v.id ? { ...x, estado: nuevoEstado } : x));
-  };
-
-  if (cargando) return (
+  if (cargandoRol || cargando) return (
     <div className="dl-carga"><div className="spinner-bcp"/><p>Cargando dashboard...</p></div>
   );
 
-  const tabs = [
-    { id:"metricas",  Icon:AiOutlineBarChart, label:"Métricas" },
-    { id:"favoritos", Icon:FiStar,            label:"Favoritos", badge:favoritos.length, badgeColor:"#d97706" },
-    { id:"vacantes",  Icon:FiBriefcase,       label:"Vacantes",  badge:vacantes.filter(v=>v.estado==="Abierta").length, badgeColor:"#10b981" },
-  ];
+  if (rol !== "lider") return null; // guard extra mientras redirige
 
   return (
     <div className="dl-wrapper">
@@ -322,35 +233,35 @@ function DashboardLider() {
 
         <div className="dl-sidebar-user">
           <div className="dl-user-avatar">
-            {(liderData?.nombre || usuario?.email || "L")[0].toUpperCase()}
+            {(liderData?.nombre||user?.email||"L")[0].toUpperCase()}
           </div>
           <div className="dl-user-info">
-            <p className="dl-user-nombre">{liderData?.nombre || "Líder"}</p>
-            <p className="dl-user-email">{usuario?.email?.split("@")[0]}</p>
+            <p className="dl-user-nombre">{liderData?.nombre||"Líder"}</p>
+            <p className="dl-user-email">{user?.email?.split("@")[0]}</p>
           </div>
         </div>
 
         <nav className="dl-nav">
-          {tabs.map(({ id, Icon, label, badge, badgeColor }) => (
-            <button
-              key={id}
-              className={`dl-nav-btn ${tabActiva===id ? "dl-nav-active" : ""}`}
+          {[
+            { id:"metricas",  Icon:FiTrendingUp, label:"Métricas" },
+            { id:"favoritos", Icon:FiStar,       label:"Favoritos",  badge:favoritos.length,                          badgeColor:"#d97706" },
+            { id:"vacantes",  Icon:FiBriefcase,  label:"Vacantes",   badge:vacantes.filter(v=>v.activa!==false).length, badgeColor:"#003DA5" },
+          ].map(({ id, Icon, label, badge, badgeColor }) => (
+            <button key={id}
+              className={`dl-nav-btn ${tabActiva===id?"dl-nav-active":""}`}
               onClick={() => setTabActiva(id)}
             >
-              <Icon size={17}/>
-              <span>{label}</span>
-              {badge > 0 && (
-                <span className="dl-nav-badge" style={{ background:badgeColor }}>{badge}</span>
-              )}
+              <Icon size={17}/><span>{label}</span>
+              {badge>0 && <span className="dl-nav-badge" style={{background:badgeColor}}>{badge}</span>}
             </button>
           ))}
         </nav>
 
         <div className="dl-sidebar-footer">
-          <button className="dl-nav-btn dl-btn-catalogo" onClick={() => navigate("/catalogo")}>
+          <button className="dl-nav-btn dl-nav-btn-sec" onClick={() => navigate("/catalogo")}>
             <FiUsers size={17}/><span>Ver catálogo</span>
           </button>
-          <button className="dl-nav-btn dl-btn-salir" onClick={cerrarSesion}>
+          <button className="dl-nav-btn dl-nav-btn-sec" onClick={async () => { await signOut(auth); navigate("/"); }}>
             <FiLogOut size={17}/><span>Cerrar sesión</span>
           </button>
         </div>
@@ -361,35 +272,33 @@ function DashboardLider() {
         <div className="dl-topbar">
           <div>
             <h1 className="dl-topbar-titulo">
-              {tabActiva==="metricas"  ? "Métricas de Talento"
-               :tabActiva==="favoritos"? "Mis Favoritos"
-               :"Gestión de Vacantes"}
+              {tabActiva==="metricas" ? "Métricas de Talento" : tabActiva==="favoritos" ? "Mis Favoritos" : "Gestión de Vacantes"}
             </h1>
             <p className="dl-topbar-sub">
-              Bienvenido, <strong>{liderData?.nombre || usuario?.email?.split("@")[0]}</strong>
+              Bienvenido, <strong>{liderData?.nombre||user?.email?.split("@")[0]}</strong>
             </p>
           </div>
-          {tabActiva === "vacantes" && (
-            <button className="dl-btn-nueva-vacante" onClick={abrirCrear}>
-              <FiPlus size={15}/> Nueva vacante
+          {tabActiva==="vacantes" && (
+            <button className="dl-btn-nueva-vacante"
+              onClick={() => { setVacanteEdit(null); setModalVacante(true); }}>
+              <FiPlusCircle size={15}/> Nueva vacante
             </button>
           )}
         </div>
 
         <div className="dl-content">
 
-          {/* ════════ MÉTRICAS ════════ */}
-          {tabActiva === "metricas" && (
+          {/* ════ MÉTRICAS ════ */}
+          {tabActiva==="metricas" && (
             <div className="dl-metricas">
               <div className="dl-kpi-row">
-                <KpiCard label="Total practicantes" value={total}
-                  sub="Registrados en plataforma" color="#003DA5"
-                  Icon={RiTeamLine} spark={sparkData}/>
-                <KpiCard label="Perfil completo 70%+" value={perfilAlto}
+                <KpiCard label="Total practicantes" value={total} sub="Registrados en plataforma"
+                  color="#003DA5" Icon={RiTeamLine} spark={sparkData}/>
+                <KpiCard label="Perfil 70%+" value={perfilAlto}
                   sub={`${total>0?Math.round(perfilAlto/total*100):0}% del total`}
-                  color="#16a34a" Icon={FiAward}/>
-                <KpiCard label="Con experiencia" value={conExperiencia}
-                  sub={`${total>0?Math.round(conExperiencia/total*100):0}% del total`}
+                  color="#16a34a" Icon={HiOutlineBriefcase}/>
+                <KpiCard label="Con experiencia" value={conExp}
+                  sub={`${total>0?Math.round(conExp/total*100):0}% del total`}
                   color="#d97706" Icon={HiOutlineBriefcase}/>
                 <KpiCard label="Mis favoritos" value={favoritos.length}
                   sub="Guardados por ti" color="#7c3aed" Icon={FiStar}/>
@@ -415,7 +324,7 @@ function DashboardLider() {
                         { l:"60–80%",  c:"#003DA5", v:compBuckets["60–80%"] },
                         { l:"40–60%",  c:"#d97706", v:compBuckets["40–60%"] },
                         { l:"< 40%",   c:"#e5e7eb", v:compBuckets["< 40%"] },
-                      ].map((s) => (
+                      ].map(s => (
                         <div key={s.l} className="dl-legend-item">
                           <span className="dl-legend-dot" style={{background:s.c}}/>
                           <span className="dl-legend-label">{s.l}</span>
@@ -437,20 +346,20 @@ function DashboardLider() {
                   <HBarChart data={idiomaTop} color="#5c7d3e"/>
                 </div>
                 <div className="dl-chart-card">
-                  <h3 className="dl-chart-titulo">Distribución por género</h3>
+                  <h3 className="dl-chart-titulo">👤 Distribución por género</h3>
                   <HBarChart data={generoData} color="#7c3aed"/>
                 </div>
               </div>
 
               <div className="dl-mini-stats-row">
                 {[
-                  { label:"Con proyectos",     val:conProyectos,    icon:<FiAward size={16}/>,         color:"#003DA5" },
-                  { label:"Con historial BCP", val:conRotaciones,   icon:<HiOutlineOfficeBuilding size={16}/>, color:"#7c3aed" },
-                  { label:"Mis favoritos",     val:favoritos.length, icon:<FiStar size={16}/>,         color:"#d97706" },
-                  { label:"Vacantes abiertas", val:vacantes.filter(v=>v.estado==="Abierta").length, icon:<FiBriefcase size={16}/>, color:"#10b981" },
-                ].map((s) => (
+                  { label:"Con proyectos",    val:conProy,         icon:"🚀", color:"#003DA5" },
+                  { label:"Historial BCP",    val:conRot,          icon:"🔄", color:"#7c3aed" },
+                  { label:"Mis favoritos",    val:favoritos.length, icon:"⭐", color:"#d97706" },
+                  { label:"Vacantes activas", val:vacantes.filter(v=>v.activa!==false).length, icon:"📋", color:"#16a34a" },
+                ].map(s => (
                   <div key={s.label} className="dl-mini-stat">
-                    <span className="dl-mini-icon" style={{color:s.color}}>{s.icon}</span>
+                    <span className="dl-mini-icon">{s.icon}</span>
                     <div>
                       <p className="dl-mini-val" style={{color:s.color}}>{s.val}</p>
                       <p className="dl-mini-label">{s.label}</p>
@@ -461,194 +370,58 @@ function DashboardLider() {
             </div>
           )}
 
-          {/* ════════ FAVORITOS ════════ */}
-          {tabActiva === "favoritos" && (
+          {/* ════ FAVORITOS ════ */}
+          {tabActiva==="favoritos" && (
             <div>
-              {favoritos.length === 0 ? (
+              {favoritos.length===0 ? (
                 <div className="dl-empty-state">
                   <FiStar size={48} color="#d1d5db"/>
                   <h5>Aún no tienes favoritos</h5>
-                  <p>Guarda perfiles desde el catálogo</p>
+                  <p>Guarda perfiles desde el catálogo de talento</p>
                   <button className="dl-btn-ir" onClick={() => navigate("/catalogo")}>Explorar talento</button>
                 </div>
               ) : (
                 <>
                   <div className="dl-fav-search-wrap">
                     <IoSearchOutline size={15} style={{color:"#9ca3af",flexShrink:0}}/>
-                    <input
-                      className="dl-fav-search"
-                      placeholder="Buscar en favoritos..."
-                      value={busqFav}
-                      onChange={(e) => setBusqFav(e.target.value)}
-                    />
+                    <input className="dl-fav-search" placeholder="Buscar en favoritos..." value={busqFav} onChange={e=>setBusqFav(e.target.value)}/>
                   </div>
                   <div className="dl-grid-3">
-                    {favFiltrados.map((p) => (
-                      <TarjetaFav key={p.id} p={p}
-                        onVer={() => irAPerfil(p.id)}
-                        onQuitar={() => quitarFavorito(p.id)}
-                      />
+                    {favFiltrados.map(p => (
+                      <TarjetaFav key={p.id} p={p} onVer={() => irAPerfil(p.id)} onQuitar={() => quitarFavorito(p.id)}/>
                     ))}
-                    {favFiltrados.length === 0 && (
-                      <p className="dl-empty-txt">Sin resultados para "{busqFav}"</p>
-                    )}
+                    {favFiltrados.length===0 && <p className="dl-empty-txt">Sin resultados para "{busqFav}"</p>}
                   </div>
                 </>
               )}
             </div>
           )}
 
-          {/* ════════ VACANTES ════════ */}
-          {tabActiva === "vacantes" && (
-            <div>
-              {/* Resumen rápido */}
-              <div className="vac-resumen-row">
-                {[
-                  { label:"Abiertas",     val:vacantes.filter(v=>v.estado==="Abierta").length,     color:"#10b981" },
-                  { label:"En revisión",  val:vacantes.filter(v=>v.estado==="En revisión").length, color:"#f59e0b" },
-                  { label:"Cerradas",     val:vacantes.filter(v=>v.estado==="Cerrada").length,     color:"#9ca3af" },
-                  { label:"Total",        val:vacantes.length,                                    color:"#003DA5" },
-                ].map((s) => (
-                  <div key={s.label} className="vac-resumen-pill" style={{borderColor:s.color}}>
-                    <span className="vac-resumen-val" style={{color:s.color}}>{s.val}</span>
-                    <span className="vac-resumen-label">{s.label}</span>
-                  </div>
-                ))}
-              </div>
-
-              {vacantes.length === 0 ? (
-                <div className="dl-empty-state">
-                  <FiBriefcase size={48} color="#d1d5db"/>
-                  <h5>No tienes vacantes publicadas</h5>
-                  <p>Crea la primera vacante para que los practicantes puedan postularse</p>
-                  <button className="dl-btn-nueva-vacante" onClick={abrirCrear}>
-                    <FiPlus size={14}/> Crear vacante
-                  </button>
-                </div>
-              ) : (
-                <div className="vac-grid">
-                  {vacantes.map((v) => (
-                    <TarjetaVacante key={v.id} v={v}
-                      onEditar={() => abrirEditar(v)}
-                      onEliminar={() => setConfirmDelete(v)}
-                      onCambiarEstado={(nuevo) => cambiarEstadoVacante(v, nuevo)}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
+          {/* ════ VACANTES ════ */}
+          {tabActiva==="vacantes" && (
+            <TabVacantes
+              vacantes={vacantes}
+              setVacantes={setVacantes}
+              liderData={liderData}
+              user={user}
+              onEditar={(v) => { setVacanteEdit(v); setModalVacante(true); }}
+              navigate={navigate}
+            />
           )}
-
         </div>
       </main>
 
-      {/* ════════ MODAL VACANTE ════════ */}
       {modalVacante && (
-        <div className="vac-modal-overlay" onClick={() => setModalVacante(false)}>
-          <div className="vac-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="vac-modal-header">
-              <h3>{vacantEdit ? "Editar vacante" : "Nueva vacante"}</h3>
-              <button className="vac-modal-close" onClick={() => setModalVacante(false)}>
-                <FiX size={18}/>
-              </button>
-            </div>
-
-            <div className="vac-modal-body">
-              <div className="vac-form-row">
-                <div className="vac-form-group vac-form-group-lg">
-                  <label>Título del puesto *</label>
-                  <input
-                    placeholder="Ej: Practicante de Analítica de Datos"
-                    value={vacForm.titulo}
-                    onChange={(e) => setVacForm({...vacForm, titulo:e.target.value})}
-                  />
-                </div>
-                <div className="vac-form-group">
-                  <label>Área BCP *</label>
-                  <select value={vacForm.area} onChange={(e) => setVacForm({...vacForm, area:e.target.value})}>
-                    <option value="">Seleccionar...</option>
-                    {AREAS_BCP.map((a) => <option key={a} value={a}>{a}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div className="vac-form-row">
-                <div className="vac-form-group">
-                  <label>Modalidad</label>
-                  <select value={vacForm.modalidad} onChange={(e) => setVacForm({...vacForm, modalidad:e.target.value})}>
-                    {MODALIDAD_OPC.map((m) => <option key={m} value={m}>{m}</option>)}
-                  </select>
-                </div>
-                <div className="vac-form-group">
-                  <label>Jornada</label>
-                  <select value={vacForm.jornada} onChange={(e) => setVacForm({...vacForm, jornada:e.target.value})}>
-                    {JORNADA_OPC.map((j) => <option key={j} value={j}>{j}</option>)}
-                  </select>
-                </div>
-                <div className="vac-form-group">
-                  <label>Ubicación</label>
-                  <input
-                    placeholder="Lima"
-                    value={vacForm.ubicacion}
-                    onChange={(e) => setVacForm({...vacForm, ubicacion:e.target.value})}
-                  />
-                </div>
-                <div className="vac-form-group">
-                  <label>Estado</label>
-                  <select value={vacForm.estado} onChange={(e) => setVacForm({...vacForm, estado:e.target.value})}>
-                    {ESTADO_OPC.map((s) => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div className="vac-form-group">
-                <label>Descripción del puesto</label>
-                <textarea
-                  rows={4}
-                  placeholder="Describe las responsabilidades y el contexto del puesto..."
-                  value={vacForm.descripcion}
-                  onChange={(e) => setVacForm({...vacForm, descripcion:e.target.value})}
-                />
-              </div>
-
-              <div className="vac-form-group">
-                <label>Requisitos</label>
-                <textarea
-                  rows={3}
-                  placeholder="Habilidades, conocimientos y experiencia requerida..."
-                  value={vacForm.requisitos}
-                  onChange={(e) => setVacForm({...vacForm, requisitos:e.target.value})}
-                />
-              </div>
-            </div>
-
-            <div className="vac-modal-footer">
-              <button className="vac-btn-cancel" onClick={() => setModalVacante(false)}>
-                Cancelar
-              </button>
-              <button className="vac-btn-guardar" onClick={guardarVacante} disabled={guardandoVac}>
-                <FiCheck size={14}/> {guardandoVac ? "Guardando..." : vacantEdit ? "Guardar cambios" : "Publicar vacante"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ════════ CONFIRM DELETE ════════ */}
-      {confirmDelete && (
-        <div className="vac-modal-overlay" onClick={() => setConfirmDelete(null)}>
-          <div className="vac-confirm-modal" onClick={(e) => e.stopPropagation()}>
-            <FiTrash2 size={32} color="#dc2626"/>
-            <h4>¿Eliminar vacante?</h4>
-            <p>"{confirmDelete.titulo}" será eliminada permanentemente.</p>
-            <div className="vac-confirm-actions">
-              <button className="vac-btn-cancel" onClick={() => setConfirmDelete(null)}>Cancelar</button>
-              <button className="vac-btn-delete" onClick={() => eliminarVacante(confirmDelete.id)}>
-                Sí, eliminar
-              </button>
-            </div>
-          </div>
-        </div>
+        <ModalVacante
+          vacante={vacanteEdit}
+          liderData={liderData}
+          user={user}
+          onCerrar={() => setModalVacante(false)}
+          onGuardar={(nueva) => {
+            setVacantes(prev => vacanteEdit ? prev.map(v=>v.id===nueva.id?nueva:v) : [nueva,...prev]);
+            setModalVacante(false);
+          }}
+        />
       )}
     </div>
   );
@@ -659,12 +432,10 @@ function KpiCard({ label, value, sub, color, Icon, spark }) {
   return (
     <div className="dl-kpi-card">
       <div className="dl-kpi-top">
-        <div className="dl-kpi-icon-wrap" style={{ background:`${color}18`, color }}>
-          <Icon size={18}/>
-        </div>
+        <div className="dl-kpi-icon-wrap" style={{background:`${color}18`,color}}><Icon size={18}/></div>
         {spark && <SparkLine values={spark} color={color} width={90} height={38}/>}
       </div>
-      <p className="dl-kpi-value" style={{ color }}>{value}</p>
+      <p className="dl-kpi-value" style={{color}}>{value}</p>
       <p className="dl-kpi-label">{label}</p>
       {sub && <p className="dl-kpi-sub">{sub}</p>}
     </div>
@@ -673,19 +444,18 @@ function KpiCard({ label, value, sub, color, Icon, spark }) {
 
 /* ── Tarjeta favorito ── */
 function TarjetaFav({ p, onVer, onQuitar }) {
-  const ubicacion = [p.ciudad, p.pais].filter(Boolean).join(", ") || p.distrito;
+  const ubicacion = [p.ciudad,p.pais].filter(Boolean).join(", ")||p.distrito;
   return (
     <div className="dl-person-card">
       <div className="dl-person-header">
         <div className="dl-person-avatar">
           {p.foto
             ? <img src={p.foto} alt={p.nombre} style={{width:"100%",height:"100%",borderRadius:"50%",objectFit:"cover"}}/>
-            : p.nombre?.charAt(0)?.toUpperCase()
-          }
+            : p.nombre?.charAt(0)?.toUpperCase()}
         </div>
         <div style={{flex:1,minWidth:0}}>
           <p className="dl-person-nombre">{p.nombre}</p>
-          <p className="dl-person-titulo">{p.titulo || "Sin título"}</p>
+          <p className="dl-person-titulo">{p.titulo||"Sin título"}</p>
           {ubicacion && <p className="dl-person-meta"><FiMapPin size={10}/> {ubicacion}</p>}
         </div>
       </div>
@@ -696,78 +466,222 @@ function TarjetaFav({ p, onVer, onQuitar }) {
       <div className="dl-person-actions">
         <button className="dl-btn-ver" onClick={onVer}>Ver perfil</button>
         {p.email && (
-          <a href={`mailto:${p.email}?subject=Oportunidad BCP`} className="dl-btn-mail">
-            <FiMail size={13}/>
-          </a>
+          <a href={`mailto:${p.email}?subject=Oportunidad BCP`} className="dl-btn-mail"><FiMail size={13}/></a>
         )}
-        <button className="dl-btn-quitar" onClick={onQuitar} title="Quitar">✕</button>
+        <button className="dl-btn-quitar" onClick={onQuitar} title="Quitar de favoritos">✕</button>
       </div>
     </div>
   );
 }
 
-/* ── Tarjeta vacante ── */
-function TarjetaVacante({ v, onEditar, onEliminar, onCambiarEstado }) {
-  const ec = ESTADO_COLORS[v.estado] || ESTADO_COLORS["Cerrada"];
-  const [menuEstado, setMenuEstado] = useState(false);
+/* ════ TAB VACANTES ════ */
+function TabVacantes({ vacantes, setVacantes, liderData, user, onEditar, navigate }) {
+  const [filtroArea, setFiltroArea] = useState("");
+  const [soloMias,   setSoloMias]   = useState(false);
+
+  const filtradas = vacantes.filter(v => {
+    if (soloMias && v.liderUid !== user?.uid) return false;
+    if (filtroArea && v.area !== filtroArea) return false;
+    return true;
+  });
+
+  const eliminar = async (vId) => {
+    if (!window.confirm("¿Eliminar esta vacante?")) return;
+    await deleteDoc(doc(db, "vacantes", vId));
+    setVacantes(prev => prev.filter(v => v.id !== vId));
+  };
+
+  const toggleActiva = async (v) => {
+    await updateDoc(doc(db, "vacantes", v.id), { activa: !v.activa });
+    setVacantes(prev => prev.map(x => x.id===v.id ? {...x, activa:!x.activa} : x));
+  };
 
   return (
-    <div className="vac-card">
-      {/* Header */}
-      <div className="vac-card-header">
-        <div style={{flex:1, minWidth:0}}>
-          <h4 className="vac-card-titulo">{v.titulo}</h4>
-          <p className="vac-card-area">{v.area}</p>
+    <div>
+      <div className="vac-filtros-bar">
+        <select className="vac-select" value={filtroArea} onChange={e=>setFiltroArea(e.target.value)}>
+          <option value="">Todas las áreas</option>
+          {AREAS_BCP.map(a => <option key={a}>{a}</option>)}
+        </select>
+        <label className="vac-toggle-label">
+          <input type="checkbox" checked={soloMias} onChange={e=>setSoloMias(e.target.checked)}/>
+          Solo mis vacantes
+        </label>
+        <span className="vac-count">{filtradas.length} vacante{filtradas.length!==1?"s":""}</span>
+      </div>
+
+      {filtradas.length===0 ? (
+        <div className="dl-empty-state">
+          <FiBriefcase size={48} color="#d1d5db"/>
+          <h5>No hay vacantes</h5>
+          <p>Publica oportunidades internas para los practicantes BCP</p>
         </div>
-        <div
-          className="vac-estado-badge"
-          style={{ background:ec.bg, color:ec.color, cursor:"pointer", position:"relative" }}
-          onClick={() => setMenuEstado((x) => !x)}
-        >
-          <span className="vac-estado-dot" style={{background:ec.dot}}/>
-          {v.estado}
-          {menuEstado && (
-            <div className="vac-estado-menu" onClick={(e)=>e.stopPropagation()}>
-              {ESTADO_OPC.filter((s)=>s!==v.estado).map((s) => (
-                <button key={s} onClick={()=>{ onCambiarEstado(s); setMenuEstado(false); }}>
-                  {s}
-                </button>
-              ))}
-            </div>
+      ) : (
+        <div className="vac-grid">
+          {filtradas.map(v => (
+            <VacanteCard key={v.id} v={v} esMia={v.liderUid===user?.uid}
+              onEditar={() => onEditar(v)}
+              onEliminar={() => eliminar(v.id)}
+              onToggle={() => toggleActiva(v)}
+              onVer={() => navigate(`/vacante/${v.id}`)}/>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function VacanteCard({ v, esMia, onEditar, onEliminar, onToggle, onVer }) {
+  const activa = v.activa !== false;
+  return (
+    <div className={`vac-card ${!activa?"vac-card-inactiva":""}`}>
+      <div className="vac-card-top">
+        <div>
+          <h4 className="vac-titulo">{v.titulo}</h4>
+          <span className="vac-area-badge">{v.area}</span>
+        </div>
+        <span className={`vac-estado ${activa?"vac-activa":"vac-cerrada"}`}>{activa?"Activa":"Cerrada"}</span>
+      </div>
+      {v.descripcion && <p className="vac-desc">{v.descripcion.slice(0,120)}{v.descripcion.length>120?"...":""}</p>}
+      <div className="vac-meta-row">
+        {v.modalidad   && <span className="vac-chip">🏢 {v.modalidad}</span>}
+        {v.jornada     && <span className="vac-chip">⏰ {v.jornada}</span>}
+        {v.fechaCierre && <span className="vac-chip">📅 Cierra: {v.fechaCierre}</span>}
+      </div>
+      {v.skills?.length>0 && (
+        <div className="vac-skills">
+          {v.skills.slice(0,4).map((s,i) => <span key={i} className="dl-tag-tec">{s}</span>)}
+        </div>
+      )}
+      <div className="vac-footer">
+        <div className="vac-lider-info">
+          <span className="vac-lider-dot">{(v.liderNombre||"L")[0]}</span>
+          <span className="vac-lider-nombre">{v.liderNombre||"Líder BCP"}</span>
+        </div>
+        <div className="vac-acciones">
+          <button className="vac-btn vac-btn-ver" onClick={onVer} title="Ver"><FiEye size={13}/></button>
+          {esMia && (
+            <>
+              <button className="vac-btn vac-btn-edit"   onClick={onEditar}   title="Editar"><FiEdit2 size={13}/></button>
+              <button className="vac-btn vac-btn-toggle" onClick={onToggle}   title={activa?"Cerrar":"Reactivar"}>{activa?"⏸":"▶"}</button>
+              <button className="vac-btn vac-btn-del"    onClick={onEliminar} title="Eliminar"><FiTrash2 size={13}/></button>
+            </>
           )}
         </div>
       </div>
+    </div>
+  );
+}
 
-      {/* Meta */}
-      <div className="vac-card-meta">
-        <span><FiMapPin size={11}/> {v.ubicacion || "Lima"}</span>
-        <span><FiClock size={11}/> {v.jornada}</span>
-        <span><FiEye size={11}/> {v.modalidad}</span>
-      </div>
+/* ════ MODAL NUEVA/EDITAR VACANTE ════ */
+function ModalVacante({ vacante, liderData, user, onCerrar, onGuardar }) {
+  const [titulo,      setTitulo]      = useState(vacante?.titulo      || "");
+  const [area,        setArea]        = useState(vacante?.area         || "");
+  const [descripcion, setDescripcion] = useState(vacante?.descripcion  || "");
+  const [requisitos,  setRequisitos]  = useState(vacante?.requisitos   || "");
+  const [modalidad,   setModalidad]   = useState(vacante?.modalidad    || "");
+  const [jornada,     setJornada]     = useState(vacante?.jornada      || "");
+  const [fechaCierre, setFechaCierre] = useState(vacante?.fechaCierre  || "");
+  const [skillsStr,   setSkillsStr]   = useState((vacante?.skills||[]).join(", "));
+  const [guardando,   setGuardando]   = useState(false);
 
-      {/* Descripción */}
-      {v.descripcion && (
-        <p className="vac-card-desc">
-          {v.descripcion.length > 120 ? v.descripcion.slice(0,120) + "…" : v.descripcion}
-        </p>
-      )}
+  const guardar = async () => {
+    if (!titulo.trim()||!area) { alert("Título y área son obligatorios."); return; }
+    setGuardando(true);
+    try {
+      const datos = {
+        titulo, area, descripcion, requisitos, modalidad, jornada, fechaCierre,
+        skills: skillsStr.split(",").map(s=>s.trim()).filter(Boolean),
+        liderUid:     user.uid,
+        liderNombre:  liderData?.nombre || user.email,
+        activa:       vacante?.activa ?? true,
+        creadoEn:     vacante?.creadoEn || serverTimestamp(),
+        actualizadoEn: serverTimestamp(),
+      };
+      if (vacante?.id) {
+        await updateDoc(doc(db, "vacantes", vacante.id), datos);
+        onGuardar({ ...datos, id: vacante.id });
+      } else {
+        const ref = await addDoc(collection(db, "vacantes"), datos);
+        onGuardar({ ...datos, id: ref.id });
+      }
+    } catch(e) { console.error(e); alert("Error al guardar."); }
+    finally { setGuardando(false); }
+  };
 
-      {/* Requisitos */}
-      {v.requisitos && (
-        <div className="vac-card-req">
-          <strong>Requisitos:</strong>
-          <p>{v.requisitos.length > 100 ? v.requisitos.slice(0,100) + "…" : v.requisitos}</p>
+  return (
+    <div className="vac-modal-overlay" onClick={onCerrar}>
+      <div className="vac-modal-caja" onClick={e=>e.stopPropagation()}>
+        <div className="vac-modal-header">
+          <h3>{vacante?"Editar vacante":"Nueva vacante"}</h3>
+          <button className="vac-modal-cerrar" onClick={onCerrar}>✕</button>
         </div>
-      )}
-
-      {/* Acciones */}
-      <div className="vac-card-actions">
-        <button className="vac-btn-edit" onClick={onEditar}>
-          <FiEdit2 size={13}/> Editar
-        </button>
-        <button className="vac-btn-del" onClick={onEliminar}>
-          <FiTrash2 size={13}/> Eliminar
-        </button>
+        <div className="vac-modal-body">
+          <div className="vac-form-grupo">
+            <label>Título del puesto *</label>
+            <input className="vac-input" placeholder="Ej: Practicante de Análisis de Datos"
+              value={titulo} onChange={e=>setTitulo(e.target.value)}/>
+          </div>
+          <div className="vac-form-fila">
+            <div className="vac-form-grupo">
+              <label>Área *</label>
+              <select className="vac-input" value={area} onChange={e=>setArea(e.target.value)}>
+                <option value="">Selecciona</option>
+                {AREAS_BCP.map(a => <option key={a}>{a}</option>)}
+              </select>
+            </div>
+            <div className="vac-form-grupo">
+              <label>Modalidad</label>
+              <select className="vac-input" value={modalidad} onChange={e=>setModalidad(e.target.value)}>
+                <option value="">Selecciona</option>
+                <option>Presencial</option><option>Remoto</option><option>Híbrido</option>
+              </select>
+            </div>
+          </div>
+          <div className="vac-form-fila">
+            <div className="vac-form-grupo">
+              <label>Jornada</label>
+              <select className="vac-input" value={jornada} onChange={e=>setJornada(e.target.value)}>
+                <option value="">Selecciona</option>
+                <option>Tiempo completo</option><option>Medio tiempo</option>
+                <option>Tiempo completo / Medio tiempo</option>
+              </select>
+            </div>
+            <div className="vac-form-grupo">
+              <label>Fecha de cierre</label>
+              <input type="date" className="vac-input" value={fechaCierre} onChange={e=>setFechaCierre(e.target.value)}/>
+            </div>
+          </div>
+          <div className="vac-form-grupo">
+            <label>Descripción del puesto</label>
+            <textarea className="vac-input vac-textarea" rows={4} maxLength={800}
+              placeholder="¿Qué hará el practicante en este rol?"
+              value={descripcion} onChange={e=>setDescripcion(e.target.value)}/>
+            <small>{descripcion.length}/800</small>
+          </div>
+          <div className="vac-form-grupo">
+            <label>Requisitos y perfil buscado</label>
+            <textarea className="vac-input vac-textarea" rows={3} maxLength={500}
+              placeholder="Conocimientos y habilidades que se valoran..."
+              value={requisitos} onChange={e=>setRequisitos(e.target.value)}/>
+          </div>
+          <div className="vac-form-grupo">
+            <label>Skills valoradas <span style={{fontWeight:400,color:"#888"}}>(separadas por comas)</span></label>
+            <input className="vac-input" placeholder="Python, SQL, Power BI, Excel..."
+              value={skillsStr} onChange={e=>setSkillsStr(e.target.value)}/>
+            {skillsStr && (
+              <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:6}}>
+                {skillsStr.split(",").filter(Boolean).map((s,i) => <span key={i} className="dl-tag-tec">{s.trim()}</span>)}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="vac-modal-footer">
+          <button className="vac-btn-cancelar" onClick={onCerrar}>Cancelar</button>
+          <button className="vac-btn-guardar" onClick={guardar} disabled={guardando}>
+            {guardando?"Guardando...":vacante?"Guardar cambios":"Publicar vacante"}
+          </button>
+        </div>
       </div>
     </div>
   );
