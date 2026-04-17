@@ -3,7 +3,10 @@ import { useNavigate } from "react-router-dom";
 import {
   addDoc, collection, query, where, getDocs,
 } from "firebase/firestore";
-import { createUserWithEmailAndPassword } from "firebase/auth";
+import { 
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword
+} from "firebase/auth";
 import { db, auth } from "../firebase/firebase";
 import "../stylesheets/Auth.css";
 import { FiUser, FiMail, FiLock, FiArrowLeft, FiAlertCircle } from "react-icons/fi";

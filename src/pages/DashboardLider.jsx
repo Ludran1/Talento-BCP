@@ -27,7 +27,6 @@ const calcComp = (p) => {
     p.titulo, p.resumen, p.area, p.intereses,
     p.experiencia?.length > 0, p.educacion?.length > 0,
     p.idiomas?.length > 0, p.cursos?.length > 0,
-    p.skills?.length > 0, p.habilidadesBlandas?.length > 0,
   ];
   return Math.round(c.filter(Boolean).length / c.length * 100);
 };
@@ -118,7 +117,6 @@ function DashboardLider() {
   const [liderData,    setLiderData]    = useState(null);
   const [practicantes, setPracticantes] = useState([]);
   const [favoritos,    setFavoritos]    = useState([]);
-  const [vacantes,     setVacantes]     = useState([]);
   const [cargando,     setCargando]     = useState(true);
   const [tabActiva,    setTabActiva]    = useState("metricas");
   const [busqFav,      setBusqFav]      = useState("");
@@ -157,10 +155,6 @@ function DashboardLider() {
           setFavoritos(favs.filter(Boolean));
         }
 
-        /* Vacantes */
-        const vSnap = await getDocs(collection(db, "vacantes"));
-        setVacantes(vSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
-
       } catch (e) { console.error(e); }
       finally { setCargando(false); }
     };
@@ -185,23 +179,6 @@ function DashboardLider() {
     practicantes.reduce((acc,p) => { if(p.area) acc[p.area]=(acc[p.area]||0)+1; return acc; }, {})
   ).sort((a,b) => b[1]-a[1]).slice(0,6).map(([label,value]) => ({ label:label.split(" ")[0], value }));
 
-  const skillTop = Object.entries(
-    practicantes.reduce((acc,p) => {
-      (p.skills||[]).forEach(s => { if(s) acc[s]=(acc[s]||0)+1; });
-      return acc;
-    }, {})
-  ).sort((a,b) => b[1]-a[1]).slice(0,8).map(([label,value]) => ({ label, value }));
-
-  const idiomaTop = Object.entries(
-    practicantes.reduce((acc,p) => {
-      (p.idiomas||[]).forEach(i => { const k=i.idioma||i; if(k) acc[k]=(acc[k]||0)+1; });
-      return acc;
-    }, {})
-  ).sort((a,b) => b[1]-a[1]).slice(0,6).map(([label,value]) => ({ label, value }));
-
-  const generoData = Object.entries(
-    practicantes.reduce((acc,p) => { const g=p.genero||"Sin datos"; acc[g]=(acc[g]||0)+1; return acc; }, {})
-  ).sort((a,b) => b[1]-a[1]).map(([label,value]) => ({ label, value }));
 
   const compBuckets = { "< 40%":0, "40–60%":0, "60–80%":0, "80–100%":0 };
   practicantes.forEach((p) => {
@@ -245,7 +222,6 @@ function DashboardLider() {
           {[
             { id:"metricas",  Icon:FiTrendingUp, label:"Métricas" },
             { id:"favoritos", Icon:FiStar,       label:"Favoritos",  badge:favoritos.length,                          badgeColor:"#d97706" },
-            { id:"vacantes",  Icon:FiBriefcase,  label:"Vacantes",   badge:vacantes.filter(v=>v.activa!==false).length, badgeColor:"#003DA5" },
           ].map(({ id, Icon, label, badge, badgeColor }) => (
             <button key={id}
               className={`dl-nav-btn ${tabActiva===id?"dl-nav-active":""}`}
@@ -272,18 +248,12 @@ function DashboardLider() {
         <div className="dl-topbar">
           <div>
             <h1 className="dl-topbar-titulo">
-              {tabActiva==="metricas" ? "Métricas de Talento" : tabActiva==="favoritos" ? "Mis Favoritos" : "Gestión de Vacantes"}
+              {tabActiva==="metricas" ? "Métricas de Talento" : tabActiva==="favoritos" ? "Mis Favoritos" : " "}
             </h1>
             <p className="dl-topbar-sub">
               Bienvenido, <strong>{liderData?.nombre||user?.email?.split("@")[0]}</strong>
             </p>
           </div>
-          {tabActiva==="vacantes" && (
-            <button className="dl-btn-nueva-vacante"
-              onClick={() => { setVacanteEdit(null); setModalVacante(true); }}>
-              <FiPlusCircle size={15}/> Nueva vacante
-            </button>
-          )}
         </div>
 
         <div className="dl-content">
@@ -336,37 +306,7 @@ function DashboardLider() {
                 </div>
               </div>
 
-              <div className="dl-charts-row dl-charts-row-3">
-                <div className="dl-chart-card">
-                  <h3 className="dl-chart-titulo"><MdBolt size={15}/> Skills más frecuentes</h3>
-                  <HBarChart data={skillTop} color="#003DA5"/>
-                </div>
-                <div className="dl-chart-card">
-                  <h3 className="dl-chart-titulo"><FiUsers size={15}/> Idiomas</h3>
-                  <HBarChart data={idiomaTop} color="#5c7d3e"/>
-                </div>
-                <div className="dl-chart-card">
-                  <h3 className="dl-chart-titulo">👤 Distribución por género</h3>
-                  <HBarChart data={generoData} color="#7c3aed"/>
-                </div>
-              </div>
-
-              <div className="dl-mini-stats-row">
-                {[
-                  { label:"Con proyectos",    val:conProy,         icon:"🚀", color:"#003DA5" },
-                  { label:"Historial BCP",    val:conRot,          icon:"🔄", color:"#7c3aed" },
-                  { label:"Mis favoritos",    val:favoritos.length, icon:"⭐", color:"#d97706" },
-                  { label:"Vacantes activas", val:vacantes.filter(v=>v.activa!==false).length, icon:"📋", color:"#16a34a" },
-                ].map(s => (
-                  <div key={s.label} className="dl-mini-stat">
-                    <span className="dl-mini-icon">{s.icon}</span>
-                    <div>
-                      <p className="dl-mini-val" style={{color:s.color}}>{s.val}</p>
-                      <p className="dl-mini-label">{s.label}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
+  
             </div>
           )}
 
@@ -396,33 +336,9 @@ function DashboardLider() {
               )}
             </div>
           )}
-
-          {/* ════ VACANTES ════ */}
-          {tabActiva==="vacantes" && (
-            <TabVacantes
-              vacantes={vacantes}
-              setVacantes={setVacantes}
-              liderData={liderData}
-              user={user}
-              onEditar={(v) => { setVacanteEdit(v); setModalVacante(true); }}
-              navigate={navigate}
-            />
-          )}
         </div>
       </main>
 
-      {modalVacante && (
-        <ModalVacante
-          vacante={vacanteEdit}
-          liderData={liderData}
-          user={user}
-          onCerrar={() => setModalVacante(false)}
-          onGuardar={(nueva) => {
-            setVacantes(prev => vacanteEdit ? prev.map(v=>v.id===nueva.id?nueva:v) : [nueva,...prev]);
-            setModalVacante(false);
-          }}
-        />
-      )}
     </div>
   );
 }
@@ -469,219 +385,6 @@ function TarjetaFav({ p, onVer, onQuitar }) {
           <a href={`mailto:${p.email}?subject=Oportunidad BCP`} className="dl-btn-mail"><FiMail size={13}/></a>
         )}
         <button className="dl-btn-quitar" onClick={onQuitar} title="Quitar de favoritos">✕</button>
-      </div>
-    </div>
-  );
-}
-
-/* ════ TAB VACANTES ════ */
-function TabVacantes({ vacantes, setVacantes, liderData, user, onEditar, navigate }) {
-  const [filtroArea, setFiltroArea] = useState("");
-  const [soloMias,   setSoloMias]   = useState(false);
-
-  const filtradas = vacantes.filter(v => {
-    if (soloMias && v.liderUid !== user?.uid) return false;
-    if (filtroArea && v.area !== filtroArea) return false;
-    return true;
-  });
-
-  const eliminar = async (vId) => {
-    if (!window.confirm("¿Eliminar esta vacante?")) return;
-    await deleteDoc(doc(db, "vacantes", vId));
-    setVacantes(prev => prev.filter(v => v.id !== vId));
-  };
-
-  const toggleActiva = async (v) => {
-    await updateDoc(doc(db, "vacantes", v.id), { activa: !v.activa });
-    setVacantes(prev => prev.map(x => x.id===v.id ? {...x, activa:!x.activa} : x));
-  };
-
-  return (
-    <div>
-      <div className="vac-filtros-bar">
-        <select className="vac-select" value={filtroArea} onChange={e=>setFiltroArea(e.target.value)}>
-          <option value="">Todas las áreas</option>
-          {AREAS_BCP.map(a => <option key={a}>{a}</option>)}
-        </select>
-        <label className="vac-toggle-label">
-          <input type="checkbox" checked={soloMias} onChange={e=>setSoloMias(e.target.checked)}/>
-          Solo mis vacantes
-        </label>
-        <span className="vac-count">{filtradas.length} vacante{filtradas.length!==1?"s":""}</span>
-      </div>
-
-      {filtradas.length===0 ? (
-        <div className="dl-empty-state">
-          <FiBriefcase size={48} color="#d1d5db"/>
-          <h5>No hay vacantes</h5>
-          <p>Publica oportunidades internas para los practicantes BCP</p>
-        </div>
-      ) : (
-        <div className="vac-grid">
-          {filtradas.map(v => (
-            <VacanteCard key={v.id} v={v} esMia={v.liderUid===user?.uid}
-              onEditar={() => onEditar(v)}
-              onEliminar={() => eliminar(v.id)}
-              onToggle={() => toggleActiva(v)}
-              onVer={() => navigate(`/vacante/${v.id}`)}/>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function VacanteCard({ v, esMia, onEditar, onEliminar, onToggle, onVer }) {
-  const activa = v.activa !== false;
-  return (
-    <div className={`vac-card ${!activa?"vac-card-inactiva":""}`}>
-      <div className="vac-card-top">
-        <div>
-          <h4 className="vac-titulo">{v.titulo}</h4>
-          <span className="vac-area-badge">{v.area}</span>
-        </div>
-        <span className={`vac-estado ${activa?"vac-activa":"vac-cerrada"}`}>{activa?"Activa":"Cerrada"}</span>
-      </div>
-      {v.descripcion && <p className="vac-desc">{v.descripcion.slice(0,120)}{v.descripcion.length>120?"...":""}</p>}
-      <div className="vac-meta-row">
-        {v.modalidad   && <span className="vac-chip">🏢 {v.modalidad}</span>}
-        {v.jornada     && <span className="vac-chip">⏰ {v.jornada}</span>}
-        {v.fechaCierre && <span className="vac-chip">📅 Cierra: {v.fechaCierre}</span>}
-      </div>
-      {v.skills?.length>0 && (
-        <div className="vac-skills">
-          {v.skills.slice(0,4).map((s,i) => <span key={i} className="dl-tag-tec">{s}</span>)}
-        </div>
-      )}
-      <div className="vac-footer">
-        <div className="vac-lider-info">
-          <span className="vac-lider-dot">{(v.liderNombre||"L")[0]}</span>
-          <span className="vac-lider-nombre">{v.liderNombre||"Líder BCP"}</span>
-        </div>
-        <div className="vac-acciones">
-          <button className="vac-btn vac-btn-ver" onClick={onVer} title="Ver"><FiEye size={13}/></button>
-          {esMia && (
-            <>
-              <button className="vac-btn vac-btn-edit"   onClick={onEditar}   title="Editar"><FiEdit2 size={13}/></button>
-              <button className="vac-btn vac-btn-toggle" onClick={onToggle}   title={activa?"Cerrar":"Reactivar"}>{activa?"⏸":"▶"}</button>
-              <button className="vac-btn vac-btn-del"    onClick={onEliminar} title="Eliminar"><FiTrash2 size={13}/></button>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ════ MODAL NUEVA/EDITAR VACANTE ════ */
-function ModalVacante({ vacante, liderData, user, onCerrar, onGuardar }) {
-  const [titulo,      setTitulo]      = useState(vacante?.titulo      || "");
-  const [area,        setArea]        = useState(vacante?.area         || "");
-  const [descripcion, setDescripcion] = useState(vacante?.descripcion  || "");
-  const [requisitos,  setRequisitos]  = useState(vacante?.requisitos   || "");
-  const [modalidad,   setModalidad]   = useState(vacante?.modalidad    || "");
-  const [jornada,     setJornada]     = useState(vacante?.jornada      || "");
-  const [fechaCierre, setFechaCierre] = useState(vacante?.fechaCierre  || "");
-  const [skillsStr,   setSkillsStr]   = useState((vacante?.skills||[]).join(", "));
-  const [guardando,   setGuardando]   = useState(false);
-
-  const guardar = async () => {
-    if (!titulo.trim()||!area) { alert("Título y área son obligatorios."); return; }
-    setGuardando(true);
-    try {
-      const datos = {
-        titulo, area, descripcion, requisitos, modalidad, jornada, fechaCierre,
-        skills: skillsStr.split(",").map(s=>s.trim()).filter(Boolean),
-        liderUid:     user.uid,
-        liderNombre:  liderData?.nombre || user.email,
-        activa:       vacante?.activa ?? true,
-        creadoEn:     vacante?.creadoEn || serverTimestamp(),
-        actualizadoEn: serverTimestamp(),
-      };
-      if (vacante?.id) {
-        await updateDoc(doc(db, "vacantes", vacante.id), datos);
-        onGuardar({ ...datos, id: vacante.id });
-      } else {
-        const ref = await addDoc(collection(db, "vacantes"), datos);
-        onGuardar({ ...datos, id: ref.id });
-      }
-    } catch(e) { console.error(e); alert("Error al guardar."); }
-    finally { setGuardando(false); }
-  };
-
-  return (
-    <div className="vac-modal-overlay" onClick={onCerrar}>
-      <div className="vac-modal-caja" onClick={e=>e.stopPropagation()}>
-        <div className="vac-modal-header">
-          <h3>{vacante?"Editar vacante":"Nueva vacante"}</h3>
-          <button className="vac-modal-cerrar" onClick={onCerrar}>✕</button>
-        </div>
-        <div className="vac-modal-body">
-          <div className="vac-form-grupo">
-            <label>Título del puesto *</label>
-            <input className="vac-input" placeholder="Ej: Practicante de Análisis de Datos"
-              value={titulo} onChange={e=>setTitulo(e.target.value)}/>
-          </div>
-          <div className="vac-form-fila">
-            <div className="vac-form-grupo">
-              <label>Área *</label>
-              <select className="vac-input" value={area} onChange={e=>setArea(e.target.value)}>
-                <option value="">Selecciona</option>
-                {AREAS_BCP.map(a => <option key={a}>{a}</option>)}
-              </select>
-            </div>
-            <div className="vac-form-grupo">
-              <label>Modalidad</label>
-              <select className="vac-input" value={modalidad} onChange={e=>setModalidad(e.target.value)}>
-                <option value="">Selecciona</option>
-                <option>Presencial</option><option>Remoto</option><option>Híbrido</option>
-              </select>
-            </div>
-          </div>
-          <div className="vac-form-fila">
-            <div className="vac-form-grupo">
-              <label>Jornada</label>
-              <select className="vac-input" value={jornada} onChange={e=>setJornada(e.target.value)}>
-                <option value="">Selecciona</option>
-                <option>Tiempo completo</option><option>Medio tiempo</option>
-                <option>Tiempo completo / Medio tiempo</option>
-              </select>
-            </div>
-            <div className="vac-form-grupo">
-              <label>Fecha de cierre</label>
-              <input type="date" className="vac-input" value={fechaCierre} onChange={e=>setFechaCierre(e.target.value)}/>
-            </div>
-          </div>
-          <div className="vac-form-grupo">
-            <label>Descripción del puesto</label>
-            <textarea className="vac-input vac-textarea" rows={4} maxLength={800}
-              placeholder="¿Qué hará el practicante en este rol?"
-              value={descripcion} onChange={e=>setDescripcion(e.target.value)}/>
-            <small>{descripcion.length}/800</small>
-          </div>
-          <div className="vac-form-grupo">
-            <label>Requisitos y perfil buscado</label>
-            <textarea className="vac-input vac-textarea" rows={3} maxLength={500}
-              placeholder="Conocimientos y habilidades que se valoran..."
-              value={requisitos} onChange={e=>setRequisitos(e.target.value)}/>
-          </div>
-          <div className="vac-form-grupo">
-            <label>Skills valoradas <span style={{fontWeight:400,color:"#888"}}>(separadas por comas)</span></label>
-            <input className="vac-input" placeholder="Python, SQL, Power BI, Excel..."
-              value={skillsStr} onChange={e=>setSkillsStr(e.target.value)}/>
-            {skillsStr && (
-              <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:6}}>
-                {skillsStr.split(",").filter(Boolean).map((s,i) => <span key={i} className="dl-tag-tec">{s.trim()}</span>)}
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="vac-modal-footer">
-          <button className="vac-btn-cancelar" onClick={onCerrar}>Cancelar</button>
-          <button className="vac-btn-guardar" onClick={guardar} disabled={guardando}>
-            {guardando?"Guardando...":vacante?"Guardar cambios":"Publicar vacante"}
-          </button>
-        </div>
       </div>
     </div>
   );
