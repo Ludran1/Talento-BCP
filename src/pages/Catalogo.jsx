@@ -1,211 +1,184 @@
-import { useEffect, useState } from "react";
-import { db } from "../firebase/firebase";
-import { collection, getDocs } from "firebase/firestore";
-import { useNavigate } from "react-router-dom";
-import Navbar from "../components/Navbar.jsx";
-import "../stylesheets/Catalogo.css";
+import { useState } from "react";
 
-function Catalogo() {
-  const [perfiles, setPerfiles] = useState([]);
-  const [busqueda, setBusqueda] = useState("");
-  const [areaFiltro, setAreaFiltro] = useState("");
-  const [loading, setLoading] = useState(true);
+const AREAS = [
+    "Analitica & Tecnología",
+    "Finanzas & Control",
+    "Gestión & Operaciones",
+    "Comunicación & Relación",
+];
 
-  const navigate = useNavigate();
+const IDIOMAS = ["Español", "Inglés", "Portugués", "Francés", "Alemán"];
 
-  // 🔥 CALCULAR COMPLETITUD (MISMO QUE PERFIL)
-  const calcularCompletitud = (p) => {
-    const campos = [
-      p.titulo,
-      p.resumen,
-      p.area,
-      p.intereses,
-      p.experiencia?.length > 0,
-      p.educacion?.length > 0,
-      p.cursos,
-      p.idiomas,
-      p.skills?.length > 0,
-      p.habilidadesBlandas?.length > 0,
-    ];
+const SKILLS_OPCIONES = [
+    "Excel", "Python", "SQL", "Power BI", "Tableau",
+    "Java", "React", "Node.js", "Machine Learning", "Data Science",
+];
 
-    const completos = campos.filter(Boolean).length;
-    return Math.round((completos / campos.length) * 100);
-  };
+function FiltrosPanel({ filtros, onChange, totalResultados, abierto, setAbierto }) {
 
-  // 🔥 CARGAR PERFILES
-  useEffect(() => {
-    const obtenerDatos = async () => {
-      try {
-        const snap = await getDocs(collection(db, "practicantes"));
-
-        const lista = snap.docs.map((doc) => {
-          const data = doc.data();
-
-          return {
-            id: doc.id,
-            ...data,
-            completitud: calcularCompletitud(data),
-          };
-        });
-
-        setPerfiles(lista);
-      } catch (error) {
-        console.error("Error cargando catálogo:", error);
-      } finally {
-        setLoading(false);
-      }
+    const handleSkillToggle = (skill) => {
+        const actuales = filtros.skills || [];
+        const nuevos = actuales.includes(skill)
+            ? actuales.filter((s) => s !== skill)
+            : [...actuales, skill];
+        onChange({ ...filtros, skills: nuevos });
     };
 
-    obtenerDatos();
-  }, []);
+    const handleIdiomaToggle = (idioma) => {
+        const actuales = filtros.idiomas || [];
+        const nuevos = actuales.includes(idioma)
+            ? actuales.filter((i) => i !== idioma)
+            : [...actuales, idioma];
+        onChange({ ...filtros, idiomas: nuevos });
+    };
 
-  // 🔥 FILTRO INTELIGENTE
-  const filtrados = perfiles
-    .filter((p) => {
-      // SOLO PERFILES BUENOS
-      if (p.completitud < 70) return false;
+    const limpiarFiltros = () => {
+        onChange({ area: "", skills: [], idiomas: [], experiencia: "", formacion: "", proyectos: false });
+    };
 
-      const texto = busqueda.toLowerCase();
+    const hayFiltrosActivos =
+        filtros.area ||
+        (filtros.skills || []).length > 0 ||
+        (filtros.idiomas || []).length > 0 ||
+        filtros.experiencia ||
+        filtros.formacion ||
+        filtros.proyectos;
 
-      const matchBusqueda =
-        (p.nombre || "").toLowerCase().includes(texto) ||
-        (p.titulo || "").toLowerCase().includes(texto) ||
-        (p.area || "").toLowerCase().includes(texto) ||
-        (p.intereses || "").toLowerCase().includes(texto) ||
-        (p.skills || []).join(" ").toLowerCase().includes(texto) ||
-        (p.programas || "").toLowerCase().includes(texto) ||
-        (p.cursos || "").toLowerCase().includes(texto);
-
-      const matchArea = areaFiltro ? p.area === areaFiltro : true;
-
-      return matchBusqueda && matchArea;
-    })
-    // 🔥 ORDEN PRO: MEJOR PERFIL PRIMERO
-    .sort((a, b) => b.completitud - a.completitud);
-
-  if (loading) {
-    return (
-      <div className="pantalla-carga">
-        <div className="spinner-bcp"></div>
-        <p>Cargando talento...</p>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <Navbar />
-
-      <div className="container mt-4">
-
-        {/* 🔥 HEADER */}
-        <div className="catalogo-header mb-4">
-          <h2>Explora talento interno</h2>
-          <p>Encuentra practicantes según habilidades, área e intereses</p>
-        </div>
-
-        {/* 🔍 BUSCADOR */}
-        <input
-          type="text"
-          className="form-control mb-3"
-          placeholder="Buscar por nombre, skills, intereses, tecnologías..."
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-        />
-
-        {/* 🎯 FILTROS */}
-        <div className="row mb-3">
-          <div className="col-md-6">
-            <select
-              className="form-select"
-              value={areaFiltro}
-              onChange={(e) => setAreaFiltro(e.target.value)}
-            >
-              <option value="">Todas las áreas</option>
-              <option>Analítica & Tecnología</option>
-              <option>Finanzas & Control</option>
-              <option>Gestión & Operaciones</option>
-              <option>Comunicación & Relación</option>
-            </select>
-          </div>
-
-          <div className="col-md-6 text-end">
-            <span className="badge bg-dark">
-              {filtrados.length} talentos encontrados
-            </span>
-          </div>
-        </div>
-
-        {/* 🔥 GRID */}
-        <div className="row">
-          {filtrados.map((p) => (
-            <div className="col-md-4" key={p.id}>
-              <div className="card catalogo-card shadow-sm p-3 mb-4">
-
-                {/* HEADER CARD */}
-                <div className="d-flex align-items-center">
-                  <div className="avatar-catalogo">
-                    {p.nombre?.charAt(0)?.toUpperCase()}
-                  </div>
-
-                  <div className="ms-3">
-                    <h5 className="mb-0">{p.nombre}</h5>
-                    <small className="text-muted">
-                      {p.titulo || "Sin título"}
-                    </small>
-                  </div>
-                </div>
-
-                {/* AREA */}
-                <div className="mt-2">
-                  <span className="badge bg-primary">
-                    {p.area || "Sin área"}
-                  </span>
-                </div>
-
-                {/* SKILLS */}
-                <div className="mt-2">
-                  {(p.skills || []).slice(0, 4).map((skill, i) => (
-                    <span key={i} className="badge bg-secondary me-1">
-                      {skill}
-                    </span>
-                  ))}
-                </div>
-
-                {/* COMPLETITUD */}
-                <div className="mt-3">
-                  <small>Perfil completo:</small>
-                  <div className="progress">
-                    <div
-                      className="progress-bar bg-success"
-                      style={{ width: `${p.completitud}%` }}
-                    />
-                  </div>
-                  <small>{p.completitud}%</small>
-                </div>
-
-                {/* BOTÓN */}
-                <button 
-                  className="btn btn-outline-primary btn-sm mt-3"
-                  onClick={() => navigate(`/perfil/${p.id}`)}
+    const ContenidoFiltros = () => (
+        <div className="filtros-contenido">
+            <div className="filtro-grupo">
+                <h6 className="filtro-titulo">Área de experiencia</h6>
+                <select
+                    className="filtro-select"
+                    value={filtros.area || ""}
+                    onChange={(e) => onChange({ ...filtros, area: e.target.value })}
                 >
-                  Ver perfil
-                </button>
-              </div>
+                    <option value="">Todas las áreas</option>
+                    {AREAS.map((a) => <option key={a}>{a}</option>)}
+                </select>
             </div>
-          ))}
-        </div>
 
-        {/* VACÍO */}
-        {filtrados.length === 0 && (
-          <div className="text-center mt-5">
-            <h5>No se encontraron perfiles</h5>
-            <p>Intenta con otros filtros o palabras clave</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+            <div className="filtro-grupo">
+                <h6 className="filtro-titulo">Skills técnicas</h6>
+                <div className="filtro-tags">
+                    {SKILLS_OPCIONES.map((skill) => (
+                        <button
+                            key={skill}
+                            className={`filtro-tag ${(filtros.skills || []).includes(skill) ? "activo" : ""}`}
+                            onClick={() => handleSkillToggle(skill)}
+                        >
+                            {skill}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            <div className="filtro-grupo">
+                <h6 className="filtro-titulo">Idiomas</h6>
+                <div className="filtro-tags">
+                    {IDIOMAS.map((idioma) => (
+                        <button
+                            key={idioma}
+                            className={`filtro-tag ${(filtros.idiomas || []).includes(idioma) ? "activo" : ""}`}
+                            onClick={() => handleIdiomaToggle(idioma)}
+                        >
+                            {idioma}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            <div className="filtro-grupo">
+                <h6 className="filtro-titulo">Nivel de experiencia</h6>
+                <div className="filtro-radio-grupo">
+                    {["", "Sin experiencia", "Menos de 1 año", "1-2 años", "Más de 2 años"].map((op) => (
+                        <label key={op} className="filtro-radio">
+                            <input
+                                type="radio"
+                                name="experiencia"
+                                value={op}
+                                checked={(filtros.experiencia || "") === op}
+                                onChange={(e) => onChange({ ...filtros, experiencia: e.target.value })}
+                            />
+                            <span>{op === "" ? "Cualquiera" : op}</span>
+                        </label>
+                    ))}
+                </div>
+            </div>
+
+            <div className="filtro-grupo">
+                <h6 className="filtro-titulo">Formación</h6>
+                <select
+                    className="filtro-select"
+                    value={filtros.formacion || ""}
+                    onChange={(e) => onChange({ ...filtros, formacion: e.target.value })}
+                >
+                    <option value="">Cualquier nivel</option>
+                    <option>Técnico</option>
+                    <option>Bachiller en curso</option>
+                    <option>Bachiller completo</option>
+                    <option>Maestría</option>
+                </select>
+            </div>
+
+            <div className="filtro-grupo">
+                <h6 className="filtro-titulo">Proyectos</h6>
+                <label className="filtro-checkbox">
+                    <input
+                        type="checkbox"
+                        checked={filtros.proyectos || false}
+                        onChange={(e) => onChange({ ...filtros, proyectos: e.target.checked })}
+                    />
+                    <span>Solo perfiles con proyectos</span>
+                </label>
+            </div>
+
+            {hayFiltrosActivos && (
+                <button className="filtro-limpiar" onClick={limpiarFiltros}>
+                    ✕ Limpiar filtros
+                </button>
+            )}
+        </div>
+    );
+
+    return (
+        <>
+            {/* ── OVERLAY ── */}
+            <div
+                className={`filtros-overlay ${abierto ? "visible" : ""}`}
+                onClick={() => setAbierto(false)}
+                aria-hidden="true"
+            />
+
+            {/* ── SIDEBAR MOBILE + PANEL DESKTOP ── */}
+            <aside className={`filtros-panel ${abierto ? "abierto" : ""}`}>
+
+                {/* Header solo en mobile */}
+                <div className="filtros-panel-header">
+                    <span className="filtros-panel-titulo">Filtros</span>
+                    <button
+                        className="filtros-cerrar"
+                        onClick={() => setAbierto(false)}
+                        aria-label="Cerrar filtros"
+                    >
+                        ✕
+                    </button>
+                </div>
+
+                <ContenidoFiltros />
+
+                {/* Botón aplicar — solo mobile */}
+                <div className="filtros-footer-mobile">
+                    <button
+                        className="filtros-aplicar"
+                        onClick={() => setAbierto(false)}
+                    >
+                        Ver {totalResultados} perfil{totalResultados !== 1 ? "es" : ""}
+                    </button>
+                </div>
+            </aside>
+        </>
+    );
 }
 
-export default Catalogo;
+export default FiltrosPanel;
