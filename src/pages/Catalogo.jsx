@@ -69,8 +69,7 @@ const FILTROS_INIT = {
 function Catalogo() {
   const navigate = useNavigate();
 
-  /* ── Rol desde Firestore (NO por dominio de correo) ── */
-  const { user, rol, docId: liderDocId, favIds, setFavIds } = useRol();
+  const { user, rol, docId: liderDocId, favIds, setFavIds, cargando: cargandoRol } = useRol();
   const esLider = rol === "lider";
 
   const [perfiles,     setPerfiles]     = useState([]);
@@ -144,10 +143,6 @@ function Catalogo() {
           if (!filtros.nivelEducacion.some((n) => np.includes(n))) return false;
         }
 
-        if (filtros.generos.length > 0) {
-          if (!filtros.generos.includes(p.genero)) return false;
-        }
-
         if (filtros.ubicaciones.length > 0) {
           const ubic = [p.ciudad, p.distrito, p.pais].filter(Boolean).join(" ").toLowerCase();
           if (!filtros.ubicaciones.some((u) => ubic.includes(u.toLowerCase()))) return false;
@@ -203,9 +198,10 @@ function Catalogo() {
     (filtros.soloFavoritos    ? 1 : 0) +
     (filtros.soloConProyectos ? 1 : 0);
 
-  if (loading) return (
-    <div className="pantalla-carga"><div className="spinner-bcp"/><p>Cargando talento...</p></div>
+  if (loading || cargandoRol) return (
+  <div className="pantalla-carga"><div className="spinner-bcp"/><p>Cargando talento...</p></div>
   );
+
 
   return (
     <div className="cat-wrapper">
